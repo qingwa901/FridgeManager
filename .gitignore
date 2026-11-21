@@ -3,8 +3,9 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 
-# 虚拟环境
+# 虚拟环境（setup_venv.bat 生成的 venv_{版本}_{时间}）
 .venv/
+venv_*/
 
 # 运行时数据（数据库路径在 config/config.json 中配置，不提交）
 data/

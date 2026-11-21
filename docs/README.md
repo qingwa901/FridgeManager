@@ -11,27 +11,104 @@ FridgeManager/
 ├─ config/
 │  └─ config.json        # 所有配置（端口、数据库路径、日志路径等）
 ├─ docs/
-│  └─ README.md          # 本文档
+│  ├─ README.md          # 本文档
+│  └─ RELEASE_NOTES.md   # 更新日志（含版本号规则）
+├─ VERSION               # 当前版本号，如 1.26.11.0
 ├─ src/
-│  ├─ run.py             # 启动入口
+│  ├─ server.py          # 服务器入口：python -m server（Windows 服务用这个）
+│  ├─ run.py             # 开发时的启动入口（PyCharm 直接运行），内部调用 server.py
+│  ├─ setup_venv.bat     # 新建 venv_{版本}_{时间} 并安装全部依赖
 │  ├─ config.py          # 读取配置、初始化日志、清理旧日志
 │  ├─ main.py            # FastAPI 应用：接口 + 推荐逻辑
 │  ├─ importer.py        # 从网页链接识别食谱
+│  ├─ bump_version.py    # 发布新版本：更新 VERSION 和更新日志
 │  ├─ data/recipes.json  # 种子食谱（首次运行时导入数据库）
 │  └─ static/            # 前端页面
-├─ data/fridge.db        # SQLite 数据库（自动创建）
+├─ venv_{版本}_{时间}/    # setup_venv.bat 生成的虚拟环境（不提交）
 ├─ logs/                 # 日志（自动创建）
 └─ pyproject.toml        # 项目信息与依赖
 ```
 
+数据库位置由 `config/config.json` 的 `database.path` 决定（可以放在项目外，例如 `D:\data\FridgeManager\fridge.db`）。
+
+## 安装
+
+双击 `src\setup_venv.bat`，或在命令行运行：
+
+```powershell
+src\setup_venv.bat
+```
+
+它会：
+1. 用 `py -3`（没有就用 `python`）创建新的虚拟环境 `venv_{版本}_{日期时间}`，例如 `venv_1.26.11.0_20261121_180244`；
+2. 升级 pip，按 `pyproject.toml` 安装全部依赖；
+3. 检查依赖能否正常导入，最后打印运行命令。
+
+想用指定的 Python：`src\setup_venv.bat "C:\Path\to\python.exe"`。在脚本里调用、不想最后暂停：先 `set NO_PAUSE=1`。
+
+每次升级都建一个新环境，旧环境留着。新版本有问题时，把服务指回旧环境即可回退。
+
 ## 运行
 
 ```powershell
-.venv\Scripts\python.exe -m pip install -e .
-.venv\Scripts\python.exe src\run.py
+cd src
+..\venv_1.26.11.0_20261121_180244\Scripts\python.exe -m server
 ```
 
-然后打开 http://127.0.0.1:8000 。接口文档在 http://127.0.0.1:8000/docs 。
+然后打开 `http://127.0.0.1:{端口}`（端口见 `config.json` 的 `server.port`），接口文档在 `/docs`。临时换端口：`-m server --port 8080`。
+
+开发时在 PyCharm 里直接运行 `src/run.py` 也可以，和 `-m server` 是同一套启动逻辑。
+
+## 部署为 Windows 服务
+
+用 pywin32（已包含在依赖里）注册成 Windows 服务，不需要其他工具。以**管理员身份**打开 PowerShell：
+
+```powershell
+cd D:\Code\FridgeManager\src
+$PY = "..\venv_1.26.11.0_20261121_180244\Scripts\python.exe"   # 换成实际的环境目录
+
+& $PY -m server install    # 注册服务（开机自动启动，崩溃后自动重启）
+& $PY -m server start      # 启动
+& $PY -m server status     # 查看状态（不需要管理员）
+& $PY -m server stop       # 停止
+& $PY -m server restart    # 重启
+& $PY -m server remove     # 删除服务
+```
+
+服务名为 `FridgeManager`，在"服务"管理器（`services.msc`）里显示为"冰箱管家 FridgeManager"。
+
+要点：
+- **服务实际运行的命令**：`<Python 安装目录>\python.exe -S "<src>\server.py" --service --venv "<虚拟环境>"`。没有用 pywin32 默认的 `pythonservice.exe`，也没有用虚拟环境里的 `python.exe`，因为这两种方式在虚拟环境下作为服务很容易启动失败（错误 1053）。改为由真正的 Python 解释器启动，再手动加载虚拟环境里的依赖，效果和在虚拟环境中运行一样。`install` 结束时会打印完整命令。
+- **自动重启**：`install` 会同时配置恢复策略：崩溃或启动失败后，依次在 5 秒、10 秒、60 秒后自动重启，一天后重置计数。
+- **日志**：运行日志照常写入 `logs/fridgemanager.log`。服务的启动、停止和启动失败也会写入 Windows 事件查看器（Windows 日志 → 应用程序，来源为 FridgeManager）。
+- **运行账户**：服务以 LocalSystem 身份运行，要能访问数据库所在目录（如 `D:\data\FridgeManager`）和 Python 安装目录。LocalSystem 默认都能访问。
+- **防火墙**：`server.host` 为 `0.0.0.0` 时，要让局域网访问，需要放行端口（改成你的实际端口）：
+  ```powershell
+  New-NetFirewallRule -DisplayName "FridgeManager" -Direction Inbound -Protocol TCP -LocalPort 7922 -Action Allow
+  ```
+- 不是以管理员身份运行时，`install`、`start`、`stop`、`remove` 会提示"权限不足"。
+
+**升级到新版本**（管理员 PowerShell）：
+
+```powershell
+D:\Code\FridgeManager\src\setup_venv.bat                    # 1. 建新环境 venv_<新版本>_<时间>
+cd D:\Code\FridgeManager\src
+& ..\venv_<新>\Scripts\python.exe -m server install         # 2. 服务已存在 → 改为使用新环境
+& ..\venv_<新>\Scripts\python.exe -m server restart         # 3. 重启生效
+```
+
+回退：用旧环境的 python 执行 `-m server install` 和 `-m server restart` 即可。
+
+## 版本
+
+版本号规则为 `1.{年份后两位}.{月份}.{当月序号}`，当月第一个版本序号为 0，例如 `1.26.11.0`、`1.26.11.1`。版本号保存在根目录 `VERSION` 文件，网页底部会显示当前版本，更新内容见 [RELEASE_NOTES.md](RELEASE_NOTES.md)。
+
+发布新版本：
+
+```powershell
+.venv\Scripts\python.exe src\bump_version.py --dry-run   # 先看看下一个版本号
+.venv\Scripts\python.exe src\bump_version.py             # 写入 VERSION，并在更新日志顶部插入新版本标题
+```
 
 ## 配置 `config/config.json`
 
@@ -125,3 +202,4 @@ FridgeManager/
 | GET | `/api/recommend?max_missing=2&type=素` | 推荐食谱（`type` 可选；`max_missing=-1` 表示不限） |
 | GET | `/api/daily?max_missing=2` | 今日一荤一素：`{"荤": [...], "素": [...]}`，各自按推荐顺序排列 |
 | GET | `/api/presets` | 食材预设 |
+| GET | `/api/version` | 当前版本：`{"name": "FridgeManager", "version": "1.26.11.0"}` |

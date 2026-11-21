@@ -126,12 +126,12 @@ def guess_type(ingredients: list[str]) -> str:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
-    log.info("服务启动：数据库=%s 日志=%s", DB_PATH, config.LOG_PATH)
+    log.info("服务启动：版本=%s 数据库=%s 日志=%s", config.VERSION, DB_PATH, config.LOG_PATH)
     yield
     log.info("服务停止")
 
 
-app = FastAPI(title="冰箱管家", lifespan=lifespan)
+app = FastAPI(title="冰箱管家 FridgeManager", version=config.VERSION, lifespan=lifespan)
 
 
 @app.middleware("http")
@@ -222,6 +222,12 @@ def recipe_row(row: sqlite3.Row) -> dict:
 
 
 # ---------------------------------------------------------------- 食材 API
+
+@app.get("/api/version")
+def version():
+    """当前版本号（来自根目录 VERSION 文件）。"""
+    return {"name": "FridgeManager", "version": config.VERSION}
+
 
 @app.get("/api/presets")
 def list_presets():

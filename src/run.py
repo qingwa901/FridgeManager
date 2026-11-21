@@ -1,9 +1,11 @@
-"""启动入口：python src/run.py （host/port 取自 config/config.json）"""
+"""开发时的启动入口（PyCharm 里直接运行这个文件即可）：python src/run.py
 
-import uvicorn
+和 Windows 服务用的 `python -m server` 是同一套启动逻辑，见 server.py。
+"""
 
-import config
+import sys
+
+from server import main
 
 if __name__ == "__main__":
-    config.setup_logging()
-    uvicorn.run("main:app", host=config.HOST, port=config.PORT, app_dir=str(config.SRC_DIR), log_config=None)
+    sys.exit(main())

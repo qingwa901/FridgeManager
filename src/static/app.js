@@ -682,6 +682,7 @@ ie.addEventListener("submit", async (e) => {
 
 // ---------------------------------------------------------------- 启动
 resetFoodForm();
+api("/api/version").then((v) => { $("#app-version").textContent = "v" + v.version; }).catch(() => {});
 loadPresets();
 loadFoods().then(loadShopping);
 loadRecipes();

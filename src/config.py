@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sys
 import time
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
@@ -16,6 +17,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = PROJECT_ROOT / "src"
 CONFIG_PATH = Path(os.environ.get("FRIDGEMANAGER_CONFIG", PROJECT_ROOT / "config" / "config.json"))
+VERSION_FILE = PROJECT_ROOT / "VERSION"
+# 版本号规则 1.{年后两位}.{月}.{当月第几个版本，从 0 开始}，例如 1.26.11.0
+VERSION: str = VERSION_FILE.read_text(encoding="utf-8").strip() if VERSION_FILE.exists() else "0.0.0.0"
 
 
 def _resolve(p: str) -> Path:
@@ -72,12 +76,14 @@ def setup_logging() -> logging.Logger:
     file_handler = TimedRotatingFileHandler(LOG_PATH, when="midnight", backupCount=LOG_RETENTION_DAYS,
                                             encoding="utf-8")
     file_handler.setFormatter(fmt)
-    console = logging.StreamHandler()
-    console.setFormatter(fmt)
 
     root.setLevel(LOG_LEVEL)
     root.addHandler(file_handler)
-    root.addHandler(console)
+    # 作为 Windows 服务或用 pythonw 运行时没有控制台（sys.stderr 为 None），此时只写文件
+    if sys.stderr is not None:
+        console = logging.StreamHandler()
+        console.setFormatter(fmt)
+        root.addHandler(console)
     # uvicorn 的访问日志与错误日志也写入同一文件
     for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         lg = logging.getLogger(name)

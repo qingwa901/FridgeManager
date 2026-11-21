@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "FridgeManager"
-version = "0.1.0"
+dynamic = ["version"]   # 版本号来自根目录 VERSION 文件（规则见 docs/RELEASE_NOTES.md）
 description = "冰箱管家：记录冰箱食材与保质期，并根据食谱库推荐食谱"
 readme = "docs/README.md"
 requires-python = ">=3.10"
@@ -12,6 +12,7 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
     "truststore>=0.9",  # 用操作系统证书库校验 HTTPS（与浏览器一致，兼容 Norton 等杀毒软件的 HTTPS 扫描）
+    "pywin32>=306; sys_platform == 'win32'",  # Windows 服务（python -m server install）
 ]
 
 # 本项目直接以 `python src/run.py` 运行，不作为库安装；
@@ -19,3 +20,6 @@ dependencies = [
 [tool.setuptools]
 packages = []
 py-modules = []
+
+[tool.setuptools.dynamic]
+version = { file = "VERSION" }
