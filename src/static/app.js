@@ -35,6 +35,38 @@ const storedText = (f) => {
   return d <= 0 ? "今天" : `${d}天前`;
 };
 
+// ---------------------------------------------------------------- 主题（自动 / 浅色 / 深色）
+// 自动 = 跟随浏览器报告的系统深浅色；有些手机浏览器不报告，可以手动固定。选择保存在本机浏览器。
+const THEMES = ["auto", "light", "dark"];
+const THEME_TEXT = { auto: "自动", light: "浅色", dark: "深色" };
+const darkMQ = matchMedia("(prefers-color-scheme: dark)");
+const themeMetas = $$('meta[name="theme-color"]').map((m) => ({ el: m, content: m.content, media: m.media }));
+
+function getTheme() {
+  try { const t = localStorage.getItem("theme"); return THEMES.includes(t) ? t : "auto"; } catch { return "auto"; }
+}
+function applyTheme(t) {
+  if (t === "auto") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
+  // 手动固定时，地址栏颜色也固定；自动时恢复按系统切换
+  themeMetas.forEach(({ el, content, media }) => {
+    if (t === "auto") { el.media = media; el.content = content; }
+    else { el.removeAttribute("media"); el.content = t === "dark" ? "#1a2029" : "#ffffff"; }
+  });
+  const sys = darkMQ.matches ? "深色" : "浅色";
+  const btn = $("#theme-toggle");
+  btn.textContent = t === "auto" ? `🌓 自动（${sys}）` : t === "dark" ? "🌙 深色" : "☀️ 浅色";
+  btn.title = `当前：${THEME_TEXT[t]}；浏览器报告的系统模式：${sys}。点击切换：自动 → 浅色 → 深色`;
+}
+$("#theme-toggle").addEventListener("click", () => {
+  const next = THEMES[(THEMES.indexOf(getTheme()) + 1) % THEMES.length];
+  try { if (next === "auto") localStorage.removeItem("theme"); else localStorage.setItem("theme", next); } catch {}
+  applyTheme(next);
+  toast(`主题：${THEME_TEXT[next]}`);
+});
+darkMQ.addEventListener?.("change", () => applyTheme(getTheme()));   // 系统切换夜间模式时更新按钮文字
+applyTheme(getTheme());
+
 // ---------------------------------------------------------------- 标签页
 $$(".tab").forEach((btn) => btn.addEventListener("click", () => {
   $$(".tab").forEach((b) => b.classList.toggle("active", b === btn));

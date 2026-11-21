@@ -7,12 +7,17 @@
   <!-- 手机浏览器地址栏颜色，跟随深浅色模式（与 style.css 的 --card 一致） -->
   <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1a2029">
+  <script>
+    // 在页面绘制前应用手动选择的主题，避免先闪一下浅色。取值：light / dark；没有 = 自动跟随系统
+    try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
   <title>冰箱管家</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header>
   <h1>🧊 冰箱管家</h1>
+  <button type="button" class="theme-toggle" id="theme-toggle" title="切换主题：自动 → 浅色 → 深色"></button>
   <nav>
     <button class="tab active" data-tab="fridge">我的冰箱</button>
     <button class="tab" data-tab="recommend">推荐食谱</button>

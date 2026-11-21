@@ -19,9 +19,13 @@
   --toast-bg: #333; --toast-fg: #fff;
 }
 
-/* ---------------- 颜色：深色（跟随手机 / 系统的夜间模式自动切换）---------------- */
+/* ---------------- 颜色：深色 ----------------
+   两种情况使用深色（两段内容必须保持一致，改颜色时两处一起改）：
+   1. 主题为"自动"（html 上没有 data-theme）且浏览器报告系统是夜间模式；
+   2. 用户在页头手动选了"深色"（html[data-theme="dark"]）。
+   有些手机浏览器不会把系统夜间模式告诉网页，所以需要第 2 种手动切换。 */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0f1419; --card: #1a2029; --text: #e3e7ec; --muted: #8d98a5; --border: #2c3540;
     --primary: #3d8bfd; --red: #ff6b6b; --orange: #ffa94d; --green: #51cf66;
     --red-bg: #3b1f23; --orange-bg: #3a2b16; --green-bg: #1a3223;
@@ -39,6 +43,32 @@
     --backdrop: rgba(0, 0, 0, .6);
     --toast-bg: #e3e7ec; --toast-fg: #111;
   }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1419; --card: #1a2029; --text: #e3e7ec; --muted: #8d98a5; --border: #2c3540;
+  --primary: #3d8bfd; --red: #ff6b6b; --orange: #ffa94d; --green: #51cf66;
+  --red-bg: #3b1f23; --orange-bg: #3a2b16; --green-bg: #1a3223;
+  --on-primary: #fff;
+  --on-accent: #0f1419;
+  --input-bg: #121820;
+  --surface-2: #161c24;
+  --chip: #262e38;
+  --track: #29313b;
+  --accent-bg: #1c2d45;
+  --meat: #ff8787;
+  --highlight: #6b5410;
+  --neutral: #5c6670;
+  --shadow: rgba(0, 0, 0, .5);
+  --backdrop: rgba(0, 0, 0, .6);
+  --toast-bg: #e3e7ec; --toast-fg: #111;
+}
+:root[data-theme="light"] { color-scheme: light; }   /* 手动浅色：原生控件也固定为浅色 */
+
+/* 页头的主题切换按钮 */
+.theme-toggle { margin-left: auto; order: 3; padding: 4px 10px; font-size: 13px; white-space: nowrap; color: var(--muted); }
+@media (max-width: 640px) {
+  .theme-toggle { order: 0; }   /* 手机上放在标题右边，标签栏在下一行 */
 }
 * { box-sizing: border-box; }
 /* touch-action: manipulation 关掉"双击放大"（快速连点按钮时页面被意外放大，之后滑动会拖着整个页面走），
