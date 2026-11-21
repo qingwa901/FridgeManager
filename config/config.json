@@ -7,7 +7,7 @@
     "path": "D:\\data\\FridgeManager\\fridge.db"
   },
   "log": {
-    "path": "logs/fridgeweb.log",
+    "path": "logs/fridgemanager.log",
     "level": "INFO",
     "retention_days": 14
   },

@@ -1,4 +1,4 @@
-# 冰箱管家 fridgeweb
+# 冰箱管家 FridgeManager
 
 记录冰箱里的食材和保质期，并根据食谱库推荐现在能做的菜。
 
@@ -7,7 +7,7 @@
 ## 目录结构
 
 ```
-fridgeweb/
+FridgeManager/
 ├─ config/
 │  └─ config.json        # 所有配置（端口、数据库路径、日志路径等）
 ├─ docs/
@@ -39,7 +39,7 @@ fridgeweb/
 |---|---|---|
 | `server.host` / `server.port` | 监听地址 / 端口 | `127.0.0.1` / `8000` |
 | `database.path` | SQLite 文件路径 | `data/fridge.db` |
-| `log.path` | 日志文件路径 | `logs/fridgeweb.log` |
+| `log.path` | 日志文件路径 | `logs/fridgemanager.log` |
 | `log.level` | 日志级别 | `INFO` |
 | `log.retention_days` | 日志保留天数 | `14` |
 | `fridge.expiring_days` | 剩余天数 ≤ 该值算"即将过期" | `3` |
@@ -50,12 +50,12 @@ fridgeweb/
 | `recipe_import.skip_words` | 导入时默认标为"删除"的食材名 | 水、清水、开水等 |
 | `food_presets` | 食材预设：`name` 名称、`category` 分类、`shelf_days` 冷藏保质天数、`quantity` 默认数量（见底 / 1份～10份 / 很多） | 包菜、茄子、白菜、蘑菇、豆角、豆芽菜 |
 
-相对路径都相对于项目根目录。也可以用环境变量 `FRIDGEWEB_CONFIG` 指定另一个配置文件。
+相对路径都相对于项目根目录。也可以用环境变量 `FRIDGEMANAGER_CONFIG` 指定另一个配置文件。
 
 ## 日志
 
 - 同时输出到控制台和 `log.path`。内容包括：启动/停止、每个 `/api` 请求（方法、路径、状态码、耗时）、食材和食谱的增删改、推荐结果数量、未捕获的异常堆栈。
-- 每天午夜轮转一次，旧文件命名为 `fridgeweb.log.YYYY-MM-DD`。
+- 每天午夜轮转一次，旧文件命名为 `fridgemanager.log.YYYY-MM-DD`。
 - 超过 `retention_days`（默认 14 天）的旧日志会自动删除：轮转时会清理，程序启动时也会再检查一次（防止午夜时程序没在运行）。
 
 ## 功能

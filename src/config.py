@@ -1,7 +1,7 @@
 """读取 config/config.json，并初始化日志。
 
 配置中的相对路径一律相对于项目根目录解析。
-可通过环境变量 FRIDGEWEB_CONFIG 指定其他配置文件。
+可通过环境变量 FRIDGEMANAGER_CONFIG 指定其他配置文件。
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = PROJECT_ROOT / "src"
-CONFIG_PATH = Path(os.environ.get("FRIDGEWEB_CONFIG", PROJECT_ROOT / "config" / "config.json"))
+CONFIG_PATH = Path(os.environ.get("FRIDGEMANAGER_CONFIG", PROJECT_ROOT / "config" / "config.json"))
 
 
 def _resolve(p: str) -> Path:
@@ -45,7 +45,7 @@ IMPORT_ALLOWED_HOSTS: set[str] = {h.lower() for h in _cfg.get("recipe_import", {
 
 
 def cleanup_old_logs() -> list[Path]:
-    """删除日志目录中修改时间早于 retention_days 的历史日志（fridgeweb.log.YYYY-MM-DD 等）。
+    """删除日志目录中修改时间早于 retention_days 的历史日志（fridgemanager.log.YYYY-MM-DD 等）。
 
     TimedRotatingFileHandler 只在午夜轮转时清理；如果程序那时没在运行，
     启动时这里会再兜底清理一次。
@@ -62,8 +62,8 @@ def cleanup_old_logs() -> list[Path]:
 def setup_logging() -> logging.Logger:
     """配置根日志：控制台 + 每天午夜轮转的日志文件，只保留最近 retention_days 天。可重复调用。"""
     root = logging.getLogger()
-    if getattr(root, "_fridgeweb_configured", False):
-        return logging.getLogger("fridgeweb")
+    if getattr(root, "_fridgemanager_configured", False):
+        return logging.getLogger("fridgemanager")
 
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     removed = cleanup_old_logs()
@@ -83,8 +83,8 @@ def setup_logging() -> logging.Logger:
         lg = logging.getLogger(name)
         lg.handlers.clear()
         lg.propagate = True
-    root._fridgeweb_configured = True
-    log = logging.getLogger("fridgeweb")
+    root._fridgemanager_configured = True
+    log = logging.getLogger("fridgemanager")
     for f in removed:
         log.info("已清理过期日志：%s", f.name)
     return log

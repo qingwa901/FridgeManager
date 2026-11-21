@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 虚拟环境
+.venv/
+
+# 运行时数据（数据库路径在 config/config.json 中配置，不提交）
+data/
+*.db
+*.db-journal
+
+# 日志
+logs/

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "FridgeManager"
+version = "0.1.0"
+description = "冰箱管家：记录冰箱食材与保质期，并根据食谱库推荐食谱"
+readme = "docs/README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "truststore>=0.9",  # 用操作系统证书库校验 HTTPS（与浏览器一致，兼容 Norton 等杀毒软件的 HTTPS 扫描）
+]
+
+# 本项目直接以 `python src/run.py` 运行，不作为库安装；
+# `pip install -e .` 只用来安装上面的依赖，不往 site-packages 放模块。
+[tool.setuptools]
+packages = []
+py-modules = []

@@ -22,11 +22,11 @@ from urllib.parse import urlparse, urlunparse
 
 import config
 
-log = logging.getLogger("fridgeweb.importer")
+log = logging.getLogger("fridgemanager.importer")
 
 MAX_BYTES = 3 * 1024 * 1024
 TIMEOUT = 10
-UA = "Mozilla/5.0 (compatible; fridgeweb-recipe-importer)"
+UA = "Mozilla/5.0 (compatible; FridgeManager-recipe-importer)"
 
 
 class ImportError_(Exception):
