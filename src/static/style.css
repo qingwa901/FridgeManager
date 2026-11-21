@@ -4,6 +4,9 @@
   --red-bg: #fdecec; --orange-bg: #fff4e0; --green-bg: #e9f7ec;
 }
 * { box-sizing: border-box; }
+/* touch-action: manipulation 关掉"双击放大"（快速连点按钮时页面被意外放大，之后滑动会拖着整个页面走），
+   双指缩放和正常滚动不受影响。text-size-adjust 防止手机横竖屏切换时字号自动变大。 */
+html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body { margin: 0; font-family: system-ui, "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); }
 header { background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 24px;
   display: flex; align-items: center; gap: 24px; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
@@ -76,7 +79,10 @@ dialog ol { padding-left: 20px; line-height: 1.8; }
 /* 防止输入框（尤其 date）按自身宽度撑破网格 */
 .form > * { min-width: 0; }
 .form input, .form select, .form textarea { width: 100%; min-width: 0; }
-html, body { overflow-x: hidden; }
+/* 注意：不要给 html / body 加 overflow-x: hidden。手机浏览器（尤其 iOS Safari）上那会造成两层滚动区域，
+   出现"有时划不动、整页连页头一起被拖动"、吸顶页头失效等问题。
+   用 clip 只裁掉横向溢出，不会产生新的滚动区域。 */
+main { overflow-x: clip; }
 .presets { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
 .presets:empty { display: none; }
 .presets button { border-radius: 999px; padding: 4px 12px; background: var(--green-bg); color: var(--green); border-color: transparent; }
