@@ -45,9 +45,9 @@
 - 标签上用红色角标显示待买数量。
 
 ### 安装与部署
-- `src\setup_venv.bat`：一键新建虚拟环境 `venv_{版本}_{日期时间}` 并安装全部依赖。
+- `setup_venv.bat`（项目根目录）：一键新建虚拟环境 `venv_{版本}_{日期时间}` 并安装全部依赖。
 - `python -m server`（`src/server.py`）：前台运行服务器；不依赖启动目录，没有控制台也能运行，Ctrl+C 正常关闭。
-- Windows 服务（pywin32）：`python -m server install / start / stop / restart / status / remove`。开机自动启动，崩溃或启动失败后自动重启；在虚拟环境下也能稳定运行（由真正的 python.exe 启动，再加载虚拟环境的依赖）。升级时用新环境的 python 再执行一次 `install` 即可切换。
+- `python -m service`（`src/service.py`）：用 pywin32 把服务器包装成 Windows 服务（只负责服务的启动和停止，注册由用户手动完成）。服务器在子进程中运行。停止或系统关机时先优雅关闭，超时再结束整个进程树。服务器意外退出时报告服务失败。`python -m service debug` 可以在控制台按服务方式测试。
 - 版本号保存在 `VERSION` 文件，网页底部显示当前版本，新增 `/api/version` 接口；`src/bump_version.py` 按规则生成下一个版本号。
 
 ### 其他

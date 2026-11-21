@@ -12,7 +12,7 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
     "truststore>=0.9",  # 用操作系统证书库校验 HTTPS（与浏览器一致，兼容 Norton 等杀毒软件的 HTTPS 扫描）
-    "pywin32>=306; sys_platform == 'win32'",  # Windows 服务（python -m server install）
+    "pywin32>=306; sys_platform == 'win32'",  # Windows 服务包装（src/service.py）
 ]
 
 # 本项目直接以 `python src/run.py` 运行，不作为库安装；

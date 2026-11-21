@@ -15,15 +15,16 @@ FridgeManager/
 │  └─ RELEASE_NOTES.md   # 更新日志（含版本号规则）
 ├─ VERSION               # 当前版本号，如 1.26.11.0
 ├─ src/
-│  ├─ server.py          # 服务器入口：python -m server（Windows 服务用这个）
+│  ├─ server.py          # 服务器入口：python -m server（前台运行）
+│  ├─ service.py         # Windows 服务包装：python -m service
 │  ├─ run.py             # 开发时的启动入口（PyCharm 直接运行），内部调用 server.py
-│  ├─ setup_venv.bat     # 新建 venv_{版本}_{时间} 并安装全部依赖
 │  ├─ config.py          # 读取配置、初始化日志、清理旧日志
 │  ├─ main.py            # FastAPI 应用：接口 + 推荐逻辑
 │  ├─ importer.py        # 从网页链接识别食谱
 │  ├─ bump_version.py    # 发布新版本：更新 VERSION 和更新日志
 │  ├─ data/recipes.json  # 种子食谱（首次运行时导入数据库）
 │  └─ static/            # 前端页面
+├─ setup_venv.bat        # 新建 venv_{版本}_{时间} 并安装全部依赖
 ├─ venv_{版本}_{时间}/    # setup_venv.bat 生成的虚拟环境（不提交）
 ├─ logs/                 # 日志（自动创建）
 └─ pyproject.toml        # 项目信息与依赖
@@ -33,10 +34,10 @@ FridgeManager/
 
 ## 安装
 
-双击 `src\setup_venv.bat`，或在命令行运行：
+双击项目根目录的 `setup_venv.bat`，或在命令行运行：
 
 ```powershell
-src\setup_venv.bat
+D:\Code\FridgeManager\setup_venv.bat
 ```
 
 它会：
@@ -44,7 +45,7 @@ src\setup_venv.bat
 2. 升级 pip，按 `pyproject.toml` 安装全部依赖；
 3. 检查依赖能否正常导入，最后打印运行命令。
 
-想用指定的 Python：`src\setup_venv.bat "C:\Path\to\python.exe"`。在脚本里调用、不想最后暂停：先 `set NO_PAUSE=1`。
+想用指定的 Python：`setup_venv.bat "C:\Path\to\python.exe"`。在脚本里调用、不想最后暂停：先 `set NO_PAUSE=1`。
 
 每次升级都建一个新环境，旧环境留着。新版本有问题时，把服务指回旧环境即可回退。
 
@@ -61,43 +62,52 @@ cd src
 
 ## 部署为 Windows 服务
 
-用 pywin32（已包含在依赖里）注册成 Windows 服务，不需要其他工具。以**管理员身份**打开 PowerShell：
+`src/service.py` 用 pywin32（已包含在依赖里）把服务器包装成 Windows 服务。它只负责服务的启动和停止，**不负责注册**，服务由你手动注册。监听地址、端口等照常在 `config/config.json` 里配置。
 
 ```powershell
 cd D:\Code\FridgeManager\src
-$PY = "..\venv_1.26.11.0_20261121_180244\Scripts\python.exe"   # 换成实际的环境目录
-
-& $PY -m server install    # 注册服务（开机自动启动，崩溃后自动重启）
-& $PY -m server start      # 启动
-& $PY -m server status     # 查看状态（不需要管理员）
-& $PY -m server stop       # 停止
-& $PY -m server restart    # 重启
-& $PY -m server remove     # 删除服务
+..\venv_1.26.11.0_20261121_180244\Scripts\python.exe -m service debug   # 在控制台按服务方式运行，Ctrl+C 停止
 ```
 
-服务名为 `FridgeManager`，在"服务"管理器（`services.msc`）里显示为"冰箱管家 FridgeManager"。
+`python -m service` 不带参数时，由 Windows 服务管理器启动。
 
-要点：
-- **服务实际运行的命令**：`<Python 安装目录>\python.exe -S "<src>\server.py" --service --venv "<虚拟环境>"`。没有用 pywin32 默认的 `pythonservice.exe`，也没有用虚拟环境里的 `python.exe`，因为这两种方式在虚拟环境下作为服务很容易启动失败（错误 1053）。改为由真正的 Python 解释器启动，再手动加载虚拟环境里的依赖，效果和在虚拟环境中运行一样。`install` 结束时会打印完整命令。
-- **自动重启**：`install` 会同时配置恢复策略：崩溃或启动失败后，依次在 5 秒、10 秒、60 秒后自动重启，一天后重置计数。
-- **日志**：运行日志照常写入 `logs/fridgemanager.log`。服务的启动、停止和启动失败也会写入 Windows 事件查看器（Windows 日志 → 应用程序，来源为 FridgeManager）。
-- **运行账户**：服务以 LocalSystem 身份运行，要能访问数据库所在目录（如 `D:\data\FridgeManager`）和 Python 安装目录。LocalSystem 默认都能访问。
+### 工作方式
+
+- **父进程**（`service.py`）只做服务控制，导入的东西很少，能尽快连上服务管理器。
+- **子进程**里运行 `server.run_server()`（uvicorn + FastAPI）。
+- **停止**（服务停止，或系统关机时的 PRESHUTDOWN）：先通知子进程**优雅关闭**，日志里会记录"服务停止"和"服务器已退出"。10 秒内没退出，再用 `taskkill /T` 结束整个进程树。服务管理器会一直收到"正在停止"的进度，不会误判为卡死。重复收到停止请求只处理一次。
+- **服务器自己退出**（比如端口被占用、配置写错）：服务会报告失败，不会空转着一直显示"正在运行"。可以在服务属性的"恢复"页里设置失败后自动重启。
+- **日志**：服务器运行日志写入 `logs/fridgemanager.log`；服务的启动、停止和失败会写入事件查看器（Windows 日志 → 应用程序）。
+
+### 手动注册（管理员 PowerShell）
+
+示例（把环境目录换成实际的）：
+
+```powershell
+New-Service -Name FridgeManager -DisplayName "冰箱管家 FridgeManager" -StartupType Automatic `
+  -BinaryPathName '"D:\Code\FridgeManager\venv_1.26.11.0_20261121_180244\Scripts\python.exe" "D:\Code\FridgeManager\src\service.py"'
+```
+
+注意：
+- **服务的工作目录是 `C:\Windows\System32`**，不是 `src`。所以服务程序里要写 `service.py` 的**完整路径**（如上）。如果坚持用 `python.exe -m service`，需要给服务加环境变量 `PYTHONPATH`，否则会找不到模块：
+  ```powershell
+  Set-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Services\FridgeManager -Name Environment -Type MultiString -Value 'PYTHONPATH=D:\Code\FridgeManager\src'
+  ```
+- 服务名请用 `FridgeManager`，和 `service.py` 里的 `_svc_name_` 保持一致。
+- **运行账户**：默认是 LocalSystem，要能访问数据库所在目录（如 `D:\data\FridgeManager`）和 Python 安装目录。LocalSystem 默认都能访问。
 - **防火墙**：`server.host` 为 `0.0.0.0` 时，要让局域网访问，需要放行端口（改成你的实际端口）：
   ```powershell
   New-NetFirewallRule -DisplayName "FridgeManager" -Direction Inbound -Protocol TCP -LocalPort 7922 -Action Allow
   ```
-- 不是以管理员身份运行时，`install`、`start`、`stop`、`remove` 会提示"权限不足"。
 
-**升级到新版本**（管理员 PowerShell）：
+### 升级 / 回退
 
-```powershell
-D:\Code\FridgeManager\src\setup_venv.bat                    # 1. 建新环境 venv_<新版本>_<时间>
-cd D:\Code\FridgeManager\src
-& ..\venv_<新>\Scripts\python.exe -m server install         # 2. 服务已存在 → 改为使用新环境
-& ..\venv_<新>\Scripts\python.exe -m server restart         # 3. 重启生效
-```
+1. 运行 `setup_venv.bat`，建一个新环境。
+2. 停止服务。
+3. 在服务的注册表项 `HKLM:\SYSTEM\CurrentControlSet\Services\FridgeManager` 里，把 `ImagePath` 改成新环境的 `python.exe`；也可以用 `sc.exe config FridgeManager binPath= ...`。
+4. 启动服务。
 
-回退：用旧环境的 python 执行 `-m server install` 和 `-m server restart` 即可。
+回退时，把 `ImagePath` 改回旧环境即可。
 
 ## 版本
 

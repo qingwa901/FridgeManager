@@ -6,13 +6,13 @@ rem ============================================================
 rem  新建虚拟环境 venv_{版本}_{日期时间}，并安装全部依赖
 rem
 rem  用法（双击，或在命令行运行）：
-rem    src\setup_venv.bat                       使用 py -3 或 python
-rem    src\setup_venv.bat "C:\Path\python.exe"  指定用哪个 Python 创建
+rem    setup_venv.bat                       使用 py -3 或 python
+rem    setup_venv.bat "C:\Path\python.exe"  指定用哪个 Python 创建
 rem  不想在结束时暂停：先 set NO_PAUSE=1
 rem ============================================================
 
-rem 项目根目录 = 本脚本所在目录（src）的上一级
-for %%I in ("%~dp0..") do set "ROOT=%%~fI"
+rem 项目根目录 = 本脚本所在目录（去掉末尾的 \）
+for %%I in ("%~dp0.") do set "ROOT=%%~fI"
 
 rem ---- 选择 Python ----
 if not "%~1"=="" (
@@ -59,7 +59,7 @@ echo [3/4] 安装依赖（pyproject.toml）…
 if errorlevel 1 ( echo [错误] 安装依赖失败 & goto :fail )
 
 echo [4/4] 检查…
-"%VPY%" -c "import fastapi, uvicorn, truststore, sys; print('Python', sys.version.split()[0], '| fastapi', fastapi.__version__, '| uvicorn', uvicorn.__version__)"
+"%VPY%" -c "import fastapi, uvicorn, truststore, win32serviceutil, sys; print('Python', sys.version.split()[0], '| fastapi', fastapi.__version__, '| uvicorn', uvicorn.__version__, '| pywin32 ok')"
 if errorlevel 1 ( echo [错误] 依赖检查失败 & goto :fail )
 
 echo.
@@ -68,9 +68,11 @@ echo.
 echo 直接运行服务器：
 echo     cd /d "%ROOT%\src" ^&^& "%VPY%" -m server
 echo.
-echo 注册 / 升级 Windows 服务（以管理员身份打开命令行）：
-echo     cd /d "%ROOT%\src" ^&^& "%VPY%" -m server install
-echo     "%VPY%" -m server restart
+echo 在控制台按服务方式测试：
+echo     cd /d "%ROOT%\src" ^&^& "%VPY%" -m service debug
+echo.
+echo 注册为 Windows 服务时，服务程序填：
+echo     "%VPY%" "%ROOT%\src\service.py"
 echo （详见 docs\README.md 的"部署为 Windows 服务"）
 echo.
 if not defined NO_PAUSE pause
