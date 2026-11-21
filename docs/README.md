@@ -187,6 +187,10 @@ New-Service -Name FridgeManager -DisplayName "冰箱管家 FridgeManager" -Start
   - HTTPS 证书交给操作系统校验（依赖 `truststore`），结果和浏览器一致。电脑上装了 Norton 这类会扫描 HTTPS 的杀毒软件时，Python 默认的校验方式可能报"certificate has expired / verify failed"。遇到这种情况，先确认运行服务器的 Python 环境执行过 `pip install -e .`。
 - `src/data/recipes.json` 里新增的食谱，下次启动时会自动导入已有数据库；在网页上删掉的内置食谱不会被重新加回来。
 
+### 外观
+- 深色模式：跟随手机 / 电脑系统的夜间模式自动切换，切换时页面会实时变化，不需要刷新。日期选择器、下拉框等原生控件和手机浏览器地址栏也会一起变色。
+- 颜色都定义在 `src/static/style.css` 开头的变量里（浅色一套、深色一套），要调色只改那里即可。
+
 ### 补货清单
 - 标签上的红色数字是待买数量。
 - 加入清单的方式：在本页直接添加；食材数量选"缺货"；食材点"吃完"；"今日一荤一素"里点"加入补货清单"；本页底部"快用完了"（数量为见底的食材）点"加入补货清单"。同名的不会重复添加。
