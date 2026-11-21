@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>冰箱管家</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>🧊 冰箱管家</h1>
+  <nav>
+    <button class="tab active" data-tab="fridge">我的冰箱</button>
+    <button class="tab" data-tab="recommend">推荐食谱</button>
+    <button class="tab" data-tab="library">食谱库</button>
+    <button class="tab" data-tab="shopping">补货清单<span class="tab-count" id="shop-count" hidden></span></button>
+  </nav>
+</header>
+
+<main>
+  <!-- 冰箱 -->
+  <section id="fridge" class="panel active">
+    <div class="summary" id="summary"></div>
+
+    <form id="food-form" class="card form">
+      <h2 id="food-form-title">添加食材</h2>
+      <input type="hidden" name="id">
+      <div class="presets" id="presets"></div>
+      <label>名称
+        <div class="combo">
+          <input name="name" required placeholder="输入或从食谱食材中选择" autocomplete="off"
+                 role="combobox" aria-expanded="false" aria-controls="name-combo">
+          <ul id="name-combo" class="combo-list" role="listbox" hidden></ul>
+        </div>
+      </label>
+      <label>数量<select name="quantity"></select></label>
+      <label>种类
+        <select name="category">
+          <option>蔬菜</option><option>水果</option><option>肉类</option><option>海鲜</option>
+          <option>蛋奶</option><option>豆制品</option><option>主食</option><option>饮料</option>
+          <option>调料</option><option selected>其他</option>
+        </select>
+      </label>
+      <label>存入日期<input type="date" name="added_date" required></label>
+      <label>保质期至<input type="date" name="expiry_date" required></label>
+      <div class="quick">
+        保质期：<button type="button" data-days="3">+3天</button><button type="button" data-days="7">+7天</button>
+        <button type="button" data-days="14">+14天</button><button type="button" data-days="30">+30天</button>
+        <label class="check"><input type="checkbox" id="no-expiry"> 不设保质期</label>
+      </div>
+      <label class="wide">备注<input name="note" placeholder="可选"></label>
+      <div class="actions">
+        <button type="submit" class="primary">保存</button>
+        <button type="button" id="food-cancel" hidden>取消编辑</button>
+      </div>
+    </form>
+
+    <div class="toolbar">
+      <input id="food-search" placeholder="搜索食材…">
+      <select id="food-category"><option value="">全部种类</option></select>
+      <select id="food-filter">
+        <option value="">全部状态</option>
+        <option value="expired">已过期</option>
+        <option value="expiring">即将过期</option>
+        <option value="fresh">新鲜</option>
+        <option value="none">未设保质期</option>
+      </select>
+    </div>
+    <table class="card">
+      <thead><tr><th>名称</th><th>数量</th><th>种类</th><th>存入</th><th>到期</th><th>状态</th><th></th></tr></thead>
+      <tbody id="food-list"></tbody>
+    </table>
+  </section>
+
+  <!-- 推荐 -->
+  <section id="recommend" class="panel">
+    <div class="toolbar">
+      <label>最多缺少
+        <select id="max-missing">
+          <option value="0">0 种（现在就能做）</option>
+          <option value="1">1 种</option>
+          <option value="2" selected>2 种</option>
+          <option value="-1">不限（显示全部食谱）</option>
+        </select>
+        食材
+      </label>
+    </div>
+
+    <h2>🍽 今日一荤一素</h2>
+    <div id="daily" class="daily"></div>
+    <div id="daily-shopping" class="shopping"></div>
+
+    <div class="list-head">
+      <h2>全部推荐</h2>
+      <div class="seg" id="recommend-type">
+        <button data-type="" class="on">全部</button><button data-type="荤">荤菜</button><button data-type="素">素菜</button>
+      </div>
+    </div>
+    <div id="recommend-list" class="grid"></div>
+  </section>
+
+  <!-- 食谱库 -->
+  <section id="library" class="panel">
+    <form id="import-form" class="card import-box">
+      <h2>🔗 从链接导入</h2>
+      <div class="import-row">
+        <input name="url" type="url" required placeholder="粘贴 pullit 菜谱链接：https://pullit.up.railway.app/recipes/…">
+        <button type="submit" class="primary">识别食材</button>
+      </div>
+    </form>
+
+    <form id="recipe-form" class="card form">
+      <h2>添加食谱</h2>
+      <label>菜名<input name="name" required></label>
+      <label>用时（分钟）<input name="minutes" type="number" min="1" value="20"></label>
+      <label>荤/素
+        <select name="type">
+          <option value="">按食材自动判断</option><option value="荤">荤菜</option><option value="素">素菜</option>
+        </select>
+      </label>
+      <label class="wide">主要食材（逗号或空格分隔）<input name="ingredients" required placeholder="番茄, 鸡蛋"></label>
+      <label class="wide">调料（视为家中常备）<input name="seasonings" placeholder="盐, 糖, 油"></label>
+      <label class="wide">步骤（每行一步）<textarea name="steps" rows="4"></textarea></label>
+      <div class="actions"><button type="submit" class="primary">添加到食谱库</button></div>
+    </form>
+    <div class="list-head">
+      <h2>食谱库 <small id="recipe-count"></small></h2>
+      <div class="seg" id="library-type">
+        <button data-type="" class="on">全部</button><button data-type="荤">荤菜</button><button data-type="素">素菜</button>
+      </div>
+    </div>
+    <div id="recipe-list" class="grid"></div>
+  </section>
+
+  <!-- 补货清单 -->
+  <section id="shopping" class="panel">
+    <form id="shop-form" class="card shop-add">
+      <input name="name" required placeholder="要买什么？" autocomplete="off" list="shop-hints">
+      <select name="category"></select>
+      <input name="note" placeholder="备注（可选）">
+      <button type="submit" class="primary">加入清单</button>
+    </form>
+    <datalist id="shop-hints"></datalist>
+
+    <div class="list-head"><h2>🛒 待买 <small id="shop-summary"></small></h2></div>
+    <div id="shop-list" class="card shop-list"></div>
+
+    <div id="low-wrap" hidden>
+      <div class="list-head"><h2>⚠ 快用完了 <small>冰箱里数量为"见底"的食材</small></h2></div>
+      <div id="low-list" class="card shop-list"></div>
+    </div>
+  </section>
+</main>
+
+<dialog id="recipe-dialog">
+  <h2 id="dlg-title"></h2>
+  <div id="dlg-body"></div>
+  <form method="dialog" class="dlg-actions">
+    <button type="button" id="dlg-edit">编辑</button>
+    <button>关闭</button>
+  </form>
+</dialog>
+
+<dialog id="import-dialog" class="editor">
+  <form id="import-editor" method="dialog">
+    <h2>编辑导入的食谱</h2>
+    <p class="src" id="ie-src"></p>
+    <div class="ie-grid">
+      <label class="wide">菜名<input name="name" required></label>
+      <label>用时（分钟）<input name="minutes" type="number" min="1"></label>
+      <label>荤/素
+        <select name="type">
+          <option value="">自动判断</option><option value="荤">荤菜</option><option value="素">素菜</option>
+        </select>
+      </label>
+    </div>
+    <p class="hint" id="ie-type-hint"></p>
+
+    <div class="ie-head">
+      <b>食材</b>
+      <span class="legend">主料参与推荐匹配；调料默认家里有</span>
+    </div>
+    <div class="ie-bulk">
+      <button type="button" data-bulk="seasoning-skip">删除全部调料</button>
+      <button type="button" data-bulk="restore">全部恢复</button>
+    </div>
+    <div id="ie-ings"></div>
+    <button type="button" id="ie-add" class="ghost">＋ 添加食材</button>
+
+    <label class="steps">步骤（每行一步）<textarea name="steps" rows="6"></textarea></label>
+
+    <div class="actions">
+      <button type="button" value="cancel" id="ie-cancel">取消</button>
+      <button type="submit" value="save" class="primary">保存到食谱库</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
