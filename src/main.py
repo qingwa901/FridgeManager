@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import time
@@ -14,7 +15,7 @@ from datetime import date
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
@@ -493,6 +494,21 @@ def daily(max_missing: int = 2):
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
 
+STATIC_DIR = BASE_DIR / "static"
+VERSIONED_ASSETS = ("style.css", "app.js")
+
+
+def _asset_url(name: str) -> str:
+    """给静态文件地址加上内容指纹：/static/app.js?v=<md5 前 10 位>。
+    文件一改地址就变，浏览器必须重新下载。有些手机浏览器会无视 Cache-Control: no-cache，
+    刷新时直接用缓存里的旧 JS/CSS，只靠响应头不可靠。"""
+    digest = hashlib.md5((STATIC_DIR / name).read_bytes()).hexdigest()[:10]
+    return f"/static/{name}?v={digest}"
+
+
 @app.get("/", include_in_schema=False)
 def index():
-    return FileResponse(BASE_DIR / "static" / "index.html")
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    for name in VERSIONED_ASSETS:
+        html = html.replace(f'"/static/{name}"', f'"{_asset_url(name)}"')
+    return HTMLResponse(html)
