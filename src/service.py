@@ -1,4 +1,4 @@
-"""Windows 服务包装：把 server.py 的服务器包装成 Windows 服务。
+"""Windows 服务包装：把 main.py 的服务器包装成 Windows 服务。
 
 只负责服务的启动 / 停止，不负责注册；监听地址、端口等都在 config/config.json 中配置。
 
@@ -7,7 +7,7 @@
 
 结构：
     父进程（本文件）：只做服务控制，导入很轻，能尽快连上服务管理器；
-    子进程：运行 server.run_server()（uvicorn），停止时先优雅关闭，超时再结束整个进程树。
+    子进程：运行 main.Server（uvicorn），停止时先优雅关闭，超时再结束整个进程树。
 """
 
 import logging
@@ -32,27 +32,6 @@ except Exception as error:   # 缺少 pywin32 时也让模块能被导入，方�
 GRACEFUL_STOP_SECONDS = 10   # 优雅关闭的等待时间，超时后强制结束进程树
 
 
-def _run_server_process(stop_event) -> None:
-    """子进程入口。延迟导入 server（以及 FastAPI、数据库等），
-    这样父进程自身的导入很轻，StartServiceCtrlDispatcher() 能尽快连上服务管理器。"""
-    import server
-
-    class StopFlag:
-        requested = False
-        server = None
-
-    flag = StopFlag()
-
-    def wait_for_stop():
-        stop_event.wait()
-        flag.requested = True
-        if flag.server is not None:
-            flag.server.should_exit = True   # 让 uvicorn 优雅关闭
-
-    threading.Thread(target=wait_for_stop, name="stop-watcher", daemon=True).start()
-    sys.exit(server.run_server(stop_flag=flag))
-
-
 class FridgeManagerService(win32serviceutil.ServiceFramework):
     _svc_name_ = "FridgeManager"
     _svc_display_name_ = "冰箱管家 FridgeManager"
@@ -65,8 +44,30 @@ class FridgeManagerService(win32serviceutil.ServiceFramework):
         self._stopped = False
         self._stop_done = threading.Event()
         self.stop_event = multiprocessing.Event()
-        self.process = multiprocessing.Process(target=_run_server_process, args=(self.stop_event,),
-                                               name="FridgeManagerServer")
+        self.process = multiprocessing.Process(target=FridgeManagerService.run_server_process,
+                                               args=(self.stop_event,), name="FridgeManagerServer")
+
+    @staticmethod
+    def run_server_process(stop_event) -> None:
+        """子进程入口。延迟导入 main（以及 FastAPI、数据库等），
+        这样父进程自身的导入很轻，StartServiceCtrlDispatcher() 能尽快连上服务管理器。"""
+        from config import settings
+        from main import Server
+
+        class StopFlag:
+            requested = False
+            server = None
+
+        flag = StopFlag()
+
+        def wait_for_stop():
+            stop_event.wait()
+            flag.requested = True
+            if flag.server is not None:
+                flag.server.should_exit = True   # 让 uvicorn 优雅关闭
+
+        threading.Thread(target=wait_for_stop, name="stop-watcher", daemon=True).start()
+        sys.exit(Server(settings).run(stop_flag=flag))
 
     def GetAcceptedControls(self):
         result = win32serviceutil.ServiceFramework.GetAcceptedControls(self)
@@ -140,29 +141,30 @@ class FridgeManagerService(win32serviceutil.ServiceFramework):
         finally:
             self._stop_done.set()
 
-
-def main() -> None:
-    try:
-        if len(sys.argv) == 1:
-            # 由 Windows 服务管理器启动
-            servicemanager.Initialize()
-            servicemanager.PrepareToHostSingle(FridgeManagerService)
-            servicemanager.StartServiceCtrlDispatcher()
-        elif sys.argv[1:] == ["debug"]:
-            # 在控制台按服务的方式运行（不需要注册服务），Ctrl+C 停止
-            win32serviceutil.DebugService(FridgeManagerService, [FridgeManagerService._svc_name_])
-        else:
-            print("用法：python -m service          （由 Windows 服务管理器启动）\n"
-                  "      python -m service debug    （在控制台按服务方式运行，Ctrl+C 停止）")
-            sys.exit(2)
-    except Exception as error:
-        if getattr(error, "winerror", None) == 1063:   # 不是由服务管理器启动的
-            print("python -m service 需要由 Windows 服务管理器启动。\n"
-                  "在控制台测试请用：python -m service debug；直接运行服务器请用：python -m server")
-            sys.exit(1)
-        logging.getLogger("WinService").error("Failed to start", exc_info=error)
-        raise
+    @classmethod
+    def launch(cls, argv: list[str]) -> None:
+        """命令行入口：没有参数 = 由服务管理器启动；debug = 在控制台按服务方式运行。"""
+        try:
+            if not argv:
+                # 由 Windows 服务管理器启动
+                servicemanager.Initialize()
+                servicemanager.PrepareToHostSingle(cls)
+                servicemanager.StartServiceCtrlDispatcher()
+            elif argv == ["debug"]:
+                # 在控制台按服务的方式运行（不需要注册服务），Ctrl+C 停止
+                win32serviceutil.DebugService(cls, [cls._svc_name_])
+            else:
+                print("用法：python -m service          （由 Windows 服务管理器启动）\n"
+                      "      python -m service debug    （在控制台按服务方式运行，Ctrl+C 停止）")
+                sys.exit(2)
+        except Exception as error:
+            if getattr(error, "winerror", None) == 1063:   # 不是由服务管理器启动的
+                print("python -m service 需要由 Windows 服务管理器启动。\n"
+                      "在控制台测试请用：python -m service debug；直接运行服务器请用：python -m main")
+                sys.exit(1)
+            logging.getLogger("WinService").error("Failed to start", exc_info=error)
+            raise
 
 
 if __name__ == "__main__":
-    main()
+    FridgeManagerService.launch(sys.argv[1:])

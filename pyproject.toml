@@ -7,15 +7,16 @@ name = "FridgeManager"
 dynamic = ["version"]   # 版本号来自根目录 VERSION 文件（规则见 docs/RELEASE_NOTES.md）
 description = "冰箱管家：记录冰箱食材与保质期，并根据食谱库推荐食谱"
 readme = "docs/README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 dependencies = [
-    "fastapi>=0.110",
-    "uvicorn[standard]>=0.29",
+    # 公共库（git 子模块 libs/CommonLib）：日志、FastAPI 应用。[api] 同时带来 fastapi、uvicorn、pydantic
+    # 和 pywin32（Windows 服务包装 src/service.py 用），版本由公共库统一锁定，这里不再单独写。
+    # 它不在 PyPI 上，要先装好：pip install -e "libs/CommonLib[api]"（setup_venv.bat 会先装它）
+    "ZQCommonLib[api]",
     "truststore>=0.9",  # 用操作系统证书库校验 HTTPS（与浏览器一致，兼容 Norton 等杀毒软件的 HTTPS 扫描）
-    "pywin32>=306; sys_platform == 'win32'",  # Windows 服务包装（src/service.py）
 ]
 
-# 本项目直接以 `python src/run.py` 运行，不作为库安装；
+# 本项目直接以 `python -m main`（在 src 目录下）运行，不作为库安装；
 # `pip install -e .` 只用来安装上面的依赖，不往 site-packages 放模块。
 [tool.setuptools]
 packages = []

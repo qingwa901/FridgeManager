@@ -8,7 +8,7 @@ __pycache__/
 venv_*/
 
 # 运行时数据（数据库路径在 config/config.json 中配置，不提交）
-data/
+/data/
 *.db
 *.db-journal
 

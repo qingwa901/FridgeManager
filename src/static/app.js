@@ -5,14 +5,18 @@ const today = () => new Date().toLocaleDateString("sv"); // YYYY-MM-DD（本地�
 const addDays = (iso, n) => { const d = new Date(iso + "T00:00"); d.setDate(d.getDate() + n); return d.toLocaleDateString("sv"); };
 const splitList = (s) => s.split(/[,，、\s]+/).map((x) => x.trim()).filter(Boolean);
 
+// 出错时后端返回公共库的格式 {"Error": {"Title", "Method", "ErrorMsg"}}。
+// 公共库的中间件遇到未处理的异常时 HTTP 状态码也是 200，所以成功的响应也要检查 Error。
 async function api(path, opts = {}) {
   const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
-  if (!res.ok) {
-    let msg = res.statusText;
-    try { const j = await res.json(); msg = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail); } catch {}
-    throw new Error(msg);
+  if (res.status === 204) return null;
+  let data = null;
+  try { data = await res.json(); } catch {}
+  const err = data && !Array.isArray(data) ? data.Error ?? (res.ok ? null : data.detail) : null;
+  if (err || !res.ok) {
+    throw new Error(typeof err === "string" ? err : err?.ErrorMsg || (err ? JSON.stringify(err) : res.statusText));
   }
-  return res.status === 204 ? null : res.json();
+  return data;
 }
 
 function toast(msg) {
@@ -230,11 +234,16 @@ let ingredientIndex = [];   // [{name, count, kind: "main" | "seasoning"}]，按
 let comboItems = [], comboActive = -1;
 const nameInput = foodForm.name, comboList = $("#name-combo");
 
+const KIND_ORDER = { main: 0, member: 1, seasoning: 2 };
+const KIND_TEXT = { main: "食谱主料", member: "大类里的食材", seasoning: "调料" };
+
 function buildIngredientIndex() {
   const m = new Map();
+  const groupNames = new Set(groups.map((g) => g.name));
   for (const r of library) {
     for (const [list, kind] of [[r.ingredients, "main"], [r.seasonings, "seasoning"]]) {
       for (const n of new Set(list)) {
+        if (groupNames.has(n)) continue;          // 大类名（如"菌菇"）不是具体食材，不放进冰箱名称下拉
         const e = m.get(n) || { name: n, count: 0, kind };
         e.count++;
         if (kind === "main") e.kind = "main";   // 在任一道菜里当过主料就算主料
@@ -242,8 +251,18 @@ function buildIngredientIndex() {
       }
     }
   }
+  // 大类里列出的具体食材（如"羊角菇"），即使还没有食谱直接用到，也能在下拉里选
+  for (const g of groups) {
+    for (const n of g.members) {
+      if (!groupNames.has(n) && !m.has(n)) m.set(n, { name: n, count: 0, kind: "member", group: g.name });
+    }
+  }
   ingredientIndex = [...m.values()].sort((a, b) =>
-    (a.kind === b.kind ? 0 : a.kind === "main" ? -1 : 1) || b.count - a.count || a.name.localeCompare(b.name, "zh"));
+    KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || b.count - a.count || a.name.localeCompare(b.name, "zh"));
+  // 食谱编辑器的食材名提示：大类名 + 食谱里用过的主料
+  $("#ing-hints").innerHTML = [...groups.map((g) => [g.name, `大类：${g.members.slice(0, 6).join("、")}…`]),
+    ...ingredientIndex.filter((x) => x.kind === "main").map((x) => [x.name, ""])]
+    .map(([v, l]) => `<option value="${esc(v)}"${l ? ` label="${esc(l)}"` : ""}>`).join("");
 }
 
 function renderCombo() {
@@ -254,11 +273,11 @@ function renderCombo() {
   const mark = (s) => q ? esc(s).replaceAll(esc(q), `<mark>${esc(q)}</mark>`) : esc(s);
   let lastKind = null;
   comboList.innerHTML = comboItems.length ? comboItems.map((x, i) => {
-    const head = x.kind !== lastKind ? `<li class="combo-group" role="presentation">${x.kind === "main" ? "食谱主料" : "调料"}</li>` : "";
+    const head = x.kind !== lastKind ? `<li class="combo-group" role="presentation">${KIND_TEXT[x.kind]}</li>` : "";
     lastKind = x.kind;
     return `${head}<li class="combo-item" role="option" data-i="${i}">
       <span>${mark(x.name)}${have.has(x.name) ? ` <em class="have-tag">已有</em>` : ""}</span>
-      <small>${x.count} 道菜</small></li>`;
+      <small>${x.kind === "member" ? `属于${esc(x.group)}` : `${x.count} 道菜`}</small></li>`;
   }).join("") : `<li class="combo-empty">${ingredientIndex.length ? `食谱里没有"${esc(q)}"，直接保存即可` : "食谱库还没有食材"}</li>`;
   comboList.hidden = false;
   nameInput.setAttribute("aria-expanded", "true");
@@ -449,12 +468,19 @@ const typeBadge = (r, clickable = false) =>
   `<span class="badge type-${r.type === "荤" ? "meat" : "veg"}${clickable ? " toggle" : ""}"
      ${clickable ? `data-toggle-type="${r.id}" title="点击切换荤/素"` : ""}>${r.type || "?"}</span>`;
 
+// 食材标签：大类名加虚线框，鼠标悬停显示包含哪些；推荐里显示实际用的是冰箱里哪样（菌菇（干香菇））
+function ingBadge(x, cls, r = null, extra = "") {
+  const g = groups.find((g) => g.name === x);
+  const used = r?.used?.[x];
+  return `<span class="badge ${cls}${g ? " group" : ""}"${g ? ` title="大类，包含：${esc(g.expanded.join("、"))}"` : ""}>${esc(x)}${
+    used ? `<small>（${esc(used)}）</small>` : ""}${extra}</span>`;
+}
+
 function recipeCard(r, { recommend = false } = {}) {
   recipeCache[r.id] = r;
   const tags = recommend
-    ? r.have.map((x) => `<span class="badge have">${esc(x)}</span>`).join("") +
-      r.missing.map((x) => `<span class="badge missing">${esc(x)}</span>`).join("")
-    : r.ingredients.map((x) => `<span class="badge fresh">${esc(x)}</span>`).join("");
+    ? r.have.map((x) => ingBadge(x, "have", r)).join("") + r.missing.map((x) => ingBadge(x, "missing")).join("")
+    : r.ingredients.map((x) => ingBadge(x, "fresh")).join("");
   return `
     <div class="card recipe" data-recipe="${r.id}">
       <h3><span>${typeBadge(r, !recommend)} ${esc(r.name)}</span>
@@ -582,8 +608,7 @@ document.addEventListener("click", async (e) => {
   $("#dlg-title").textContent = `${r.name}（${r.type}菜 · ${r.minutes} 分钟）`;
   const amt = (x) => r.amounts?.[x] ? ` ${esc(r.amounts[x])}` : "";
   $("#dlg-body").innerHTML = `
-    <p><b>主要食材：</b>${r.ingredients.map((x) =>
-      `<span class="badge ${r.missing?.includes(x) ? "missing" : "have"}">${esc(x)}${amt(x)}</span>`).join("")}</p>
+    <p><b>主要食材：</b>${r.ingredients.map((x) => ingBadge(x, r.missing?.includes(x) ? "missing" : "have", r, amt(x))).join("")}</p>
     ${r.seasonings.length ? `<p><b>调料：</b>${r.seasonings.map((x) => esc(x) + amt(x)).join("、")}</p>` : ""}
     ${r.steps.length ? `<b>步骤：</b><ol>${r.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>` : ""}
     ${r.source_url ? `<p class="src"><a href="${esc(r.source_url)}" target="_blank" rel="noopener">查看原菜谱 →</a></p>` : ""}`;
@@ -629,7 +654,7 @@ function ingRow(ing = { name: "", amount: "", role: "main" }) {
     `<button type="button" data-role="${k}" class="${ing.role === k ? "on" : ""}">${t}</button>`).join("");
   return `
     <div class="ing-row role-${ing.role}" data-role="${ing.role}" data-orig="${ing.role}">
-      <input class="ing-name" value="${esc(ing.name)}" placeholder="食材名">
+      <input class="ing-name" value="${esc(ing.name)}" placeholder="食材名或大类" list="ing-hints">
       <input class="ing-amount" value="${esc(ing.amount)}" placeholder="用量">
       <div class="seg role-seg">${roles}</div>
     </div>`;
@@ -712,9 +737,85 @@ ie.addEventListener("submit", async (e) => {
   } catch (err) { toast("保存失败：" + err.message); }
 });
 
+// ---------------------------------------------------------------- 食材大类（右上角齿轮）
+let groups = [];
+const groupForm = $("#group-form");
+
+async function loadGroups() {
+  groups = await api("/api/groups");
+  renderGroups();
+  buildIngredientIndex();
+  renderLibrary();   // 食谱卡片上的大类标记
+}
+
+function renderGroups() {
+  $("#group-list").innerHTML = groups.length ? groups.map((g) => `
+    <div class="group-item">
+      <div><b>${esc(g.name)}</b>
+        <div class="members">${g.members.map((m) => groups.some((x) => x.name === m)
+          ? `<u title="也是大类">${esc(m)}</u>` : esc(m)).join("、")}</div></div>
+      <div class="ops"><button type="button" data-edit-group="${g.id}">编辑</button><button
+        type="button" class="danger" data-del-group="${g.id}">删除</button></div>
+    </div>`).join("")
+    : `<div class="empty">还没有大类</div>`;
+}
+
+function resetGroupForm() {
+  groupForm.reset();
+  groupForm.id.value = "";
+  $("#group-form-title").textContent = "新建大类";
+  $("#group-cancel").hidden = true;
+}
+
+$("#open-groups").addEventListener("click", () => {
+  resetGroupForm();
+  $("#groups-dialog").showModal();
+  loadGroups().catch((err) => toast("读取大类失败：" + err.message));
+});
+$("#group-cancel").addEventListener("click", resetGroupForm);
+
+$("#group-list").addEventListener("click", async (e) => {
+  const d = e.target.dataset;
+  if (d.editGroup) {
+    const g = groups.find((g) => g.id == d.editGroup);
+    groupForm.id.value = g.id;
+    groupForm.name.value = g.name;
+    groupForm.members.value = g.members.join("、");
+    $("#group-form-title").textContent = `编辑：${g.name}`;
+    $("#group-cancel").hidden = false;
+    groupForm.name.focus();
+  } else if (d.delGroup) {
+    const g = groups.find((g) => g.id == d.delGroup);
+    const used = library.filter((r) => r.ingredients.includes(g.name)).length;
+    if (!confirm(`删除大类「${g.name}」？` + (used ? `\n有 ${used} 道食谱用到了它，删除后只能匹配叫"${g.name}"的食材。` : ""))) return;
+    try {
+      await api(`/api/groups/${g.id}`, { method: "DELETE" });
+      toast("已删除"); resetGroupForm(); await loadGroups(); refreshAfterGroups();
+    } catch (err) { toast("删除失败：" + err.message); }
+  }
+});
+
+groupForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = groupForm.id.value;
+  const body = { name: groupForm.name.value.trim(), members: splitList(groupForm.members.value) };
+  if (!body.members.length) return toast("至少包含一样食材");
+  try {
+    const g = await api(id ? `/api/groups/${id}` : "/api/groups", { method: id ? "PUT" : "POST", body: JSON.stringify(body) });
+    toast(`已保存大类：${g.name}（${g.members.length} 样）`);
+    resetGroupForm(); await loadGroups(); refreshAfterGroups();
+  } catch (err) { toast("保存失败：" + err.message); }
+});
+
+// 大类改了，推荐结果和食谱卡片上的标记跟着更新
+function refreshAfterGroups() {
+  if ($("#recommend").classList.contains("active")) loadRecommend();
+}
+
 // ---------------------------------------------------------------- 启动
 resetFoodForm();
 api("/api/version").then((v) => { $("#app-version").textContent = "v" + v.version; }).catch(() => {});
 loadPresets();
 loadFoods().then(loadShopping);
 loadRecipes();
+loadGroups();

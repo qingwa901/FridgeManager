@@ -65,10 +65,12 @@
 }
 :root[data-theme="light"] { color-scheme: light; }   /* 手动浅色：原生控件也固定为浅色 */
 
-/* 页头的主题切换按钮 */
-.theme-toggle { margin-left: auto; order: 3; padding: 4px 10px; font-size: 13px; white-space: nowrap; color: var(--muted); }
+/* 页头右上角：主题切换按钮 + 齿轮（食材大类） */
+.header-tools { margin-left: auto; order: 3; display: flex; gap: 6px; align-items: center; }
+.theme-toggle { padding: 4px 10px; font-size: 13px; white-space: nowrap; color: var(--muted); }
+.gear { padding: 2px 8px; font-size: 17px; line-height: 1.3; color: var(--muted); }
 @media (max-width: 640px) {
-  .theme-toggle { order: 0; }   /* 手机上放在标题右边，标签栏在下一行 */
+  .header-tools { order: 0; }   /* 手机上放在标题右边，标签栏在下一行 */
 }
 * { box-sizing: border-box; }
 /* touch-action: manipulation 关掉"双击放大"（快速连点按钮时页面被意外放大，之后滑动会拖着整个页面走），
@@ -254,6 +256,19 @@ dialog.editor { max-width: 640px; }
 button.ghost { border-style: dashed; width: 100%; margin-top: 4px; color: var(--muted); }
 .editor .steps { margin-top: 12px; }
 .editor .actions { justify-content: flex-end; margin-top: 14px; }
+
+/* 食材大类 */
+.group-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.group-item { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; padding: 8px 10px;
+  border-radius: 8px; background: var(--surface-2); }
+.group-item .members { font-size: 13px; color: var(--muted); margin-top: 2px; word-break: break-all; }
+.group-item .ops { display: flex; gap: 4px; flex-shrink: 0; }
+.group-item .ops button { font-size: 12px; padding: 2px 8px; }
+.group-form { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; margin-bottom: 12px; }
+.group-form textarea { width: 100%; }
+.group-form .actions { justify-content: flex-end; }
+.badge.group { outline: 1px dashed currentColor; outline-offset: -1px; }   /* 大类名：虚线框 */
+.badge small { opacity: .8; }
 
 /* 今日一荤一素 */
 .daily { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

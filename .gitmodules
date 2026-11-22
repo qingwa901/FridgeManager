@@ -1,0 +1,3 @@
+[submodule "libs/CommonLib"]
+	path = libs/CommonLib
+	url = git@github.com:qingwa901/CommonLib.git

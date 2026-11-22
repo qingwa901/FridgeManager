@@ -17,7 +17,10 @@
 <body>
 <header>
   <h1>🧊 冰箱管家</h1>
-  <button type="button" class="theme-toggle" id="theme-toggle" title="切换主题：自动 → 浅色 → 深色"></button>
+  <div class="header-tools">
+    <button type="button" class="theme-toggle" id="theme-toggle" title="切换主题：自动 → 浅色 → 深色"></button>
+    <button type="button" class="gear" id="open-groups" title="食材大类" aria-label="食材大类">⚙</button>
+  </div>
   <nav>
     <button class="tab active" data-tab="fridge">我的冰箱</button>
     <button class="tab" data-tab="recommend">推荐食谱</button>
@@ -204,6 +207,27 @@
     </div>
   </form>
 </dialog>
+
+<dialog id="groups-dialog" class="editor">
+  <h2>食材大类</h2>
+  <p class="hint">食谱写大类名（如"菌菇"），冰箱里有其中任何一样（如"干香菇""羊角菇"）就算有。
+    名字要完全一样才算，"干香菇"和"香菇"是两样，需要的话都列上。大类里也可以写另一个大类名。</p>
+  <div id="group-list" class="group-list"></div>
+
+  <form id="group-form" class="group-form">
+    <b id="group-form-title">新建大类</b>
+    <input type="hidden" name="id">
+    <label>大类名<input name="name" required maxlength="20" placeholder="如：菌菇"></label>
+    <label>包含（逗号、顿号或空格分隔）<textarea name="members" rows="3" required placeholder="香菇, 羊角菇, 平菇"></textarea></label>
+    <div class="actions">
+      <button type="button" id="group-cancel" hidden>取消编辑</button>
+      <button type="submit" class="primary">保存</button>
+    </div>
+  </form>
+  <form method="dialog" class="dlg-actions"><button>关闭</button></form>
+</dialog>
+
+<datalist id="ing-hints"></datalist>
 
 <footer class="app-footer">FridgeManager <span id="app-version"></span></footer>
 

@@ -9,21 +9,51 @@
 ```
 FridgeManager/
 ├─ config/
-│  └─ config.json        # 所有配置（端口、数据库路径、日志路径等）
+│  ├─ config.json        # 所有配置（端口、数据库路径、日志路径等）
+│  └─ recipes.json       # 内置食谱（启动时导入数据库）
 ├─ docs/
 │  ├─ README.md          # 本文档
 │  └─ RELEASE_NOTES.md   # 更新日志（含版本号规则）
 ├─ VERSION               # 当前版本号，如 1.26.11.0
 ├─ src/
-│  ├─ server.py          # 服务器入口：python -m server（前台运行）
-│  ├─ service.py         # Windows 服务包装：python -m service
-│  ├─ run.py             # 开发时的启动入口（PyCharm 直接运行），内部调用 server.py
-│  ├─ config.py          # 读取配置、初始化日志、清理旧日志
-│  ├─ main.py            # FastAPI 应用：接口 + 推荐逻辑
-│  ├─ importer.py        # 从网页链接识别食谱
-│  ├─ bump_version.py    # 发布新版本：更新 VERSION 和更新日志
-│  ├─ data/recipes.json  # 种子食谱（首次运行时导入数据库）
+│  ├─ main.py            # 唯一的程序入口：python -m main。组装应用（FridgeManagerApp）、启动服务器（Server）
+│  ├─ service.py         # Windows 服务包装：python -m service（子进程里运行 main.Server）
+│  ├─ config.py          # Settings：读取 config/config.json
+│  ├─ api/               # HTTP 接口，每个类一组路由
+│  │  ├─ schemas.py               # 请求体（pydantic 模型）
+│  │  ├─ food_api.py              # FoodApi：食材、补货清单
+│  │  ├─ recipe_api.py            # RecipeApi：食谱库、从链接导入
+│  │  ├─ group_api.py             # GroupApi：食材大类
+│  │  ├─ recommend_api.py         # RecommendApi：推荐、今日一荤一素
+│  │  ├─ system_api.py            # SystemApi：版本号、食材预设
+│  │  └─ page_api.py              # PageApi：首页（JS/CSS 地址带内容指纹）
+│  ├─ function/          # 业务功能
+│  │  ├─ fridge_service.py        # FridgeService：食材、补货清单
+│  │  ├─ recipe_service.py        # RecipeService：食谱库、内置食谱导入
+│  │  ├─ group_service.py         # GroupService：食材大类
+│  │  ├─ group_resolver.py        # GroupResolver：按大类匹配食材
+│  │  ├─ recommender.py           # Recommender：推荐食谱
+│  │  ├─ recipe_type_classifier.py # RecipeTypeClassifier：判断荤素
+│  │  ├─ service_error.py         # ServiceError：业务错误（转成 HTTP 状态码）
+│  │  └─ version_bumper.py        # VersionBumper：发布新版本
+│  ├─ data/              # 数据读写，一张表一个类
+│  │  ├─ database.py              # Database：连接、事务、建表
+│  │  ├─ session.py               # Session：同一事务里的所有表
+│  │  ├─ food_table.py            # FoodTable：foods
+│  │  ├─ recipe_table.py          # RecipeTable：recipes
+│  │  ├─ seed_imported_table.py   # SeedImportedTable：seed_imported
+│  │  └─ ingredient_group_table.py # IngredientGroupTable：ingredient_groups
+│  ├─ importer/          # 从网页链接识别食谱
+│  │  ├─ recipe_importer.py       # RecipeImporter：抓取 → 识别 → 默认归类
+│  │  ├─ safe_fetcher.py          # SafeFetcher：限制网站、公网地址、HTTPS 证书
+│  │  ├─ json_ld_parser.py        # JsonLdParser：schema.org Recipe
+│  │  ├─ sveltekit_parser.py      # SvelteKitParser：SvelteKit __data.json
+│  │  ├─ text_parser.py           # TextParser：用时、"名称 用量"
+│  │  ├─ import_diagnostics.py    # ImportDiagnostics：python -m importer <链接>
+│  │  └─ recipe_import_error.py   # RecipeImportError
 │  └─ static/            # 前端页面
+├─ libs/
+│  └─ CommonLib/         # 公共库 ZQCommonLib（git 子模块）：日志、FastAPI 应用的公共部分
 ├─ setup_venv.bat        # 新建 venv_{版本}_{时间} 并安装全部依赖
 ├─ venv_{版本}_{时间}/    # setup_venv.bat 生成的虚拟环境（不提交）
 ├─ logs/                 # 日志（自动创建）
@@ -34,7 +64,16 @@ FridgeManager/
 
 ## 安装
 
-双击项目根目录的 `setup_venv.bat`，或在命令行运行：
+需要 Python 3.13 及以上。
+
+公共库 `libs/CommonLib` 是 git 子模块。第一次 clone 或拉取更新后，先把它下载 / 更新到项目记录的版本：
+
+```powershell
+cd D:\Code\FridgeManager
+git submodule update --init
+```
+
+然后双击项目根目录的 `setup_venv.bat`，或在命令行运行：
 
 ```powershell
 D:\Code\FridgeManager\setup_venv.bat
@@ -42,8 +81,12 @@ D:\Code\FridgeManager\setup_venv.bat
 
 它会：
 1. 用 `py -3`（没有就用 `python`）创建新的虚拟环境 `venv_{版本}_{日期时间}`，例如 `venv_1.26.11.0_20261121_180244`；
-2. 升级 pip，按 `pyproject.toml` 安装全部依赖；
-3. 检查依赖能否正常导入，最后打印运行命令。
+2. 升级 pip；
+3. 以 `-e` 模式安装公共库：`pip install -e "libs\CommonLib[api]"`。公共库不在 PyPI 上，必须先装它，下一步 `pyproject.toml` 里的 `ZQCommonLib[api]` 才能满足。`[api]` 会一起装上 fastapi、uvicorn、pydantic 和 pywin32，版本由公共库统一锁定；
+4. 按 `pyproject.toml` 安装其余依赖（`pip install -e .`）；
+5. 检查依赖能否正常导入，最后打印运行命令。
+
+因为是 `-e` 模式，公共库的代码改了（比如 `git submodule update` 之后）不需要重装；只有公共库的依赖变了才需要重新运行 `pip install -e "libs\CommonLib[api]"`，或者直接建一个新环境。
 
 想用指定的 Python：`setup_venv.bat "C:\Path\to\python.exe"`。在脚本里调用、不想最后暂停：先 `set NO_PAUSE=1`。
 
@@ -53,12 +96,12 @@ D:\Code\FridgeManager\setup_venv.bat
 
 ```powershell
 cd src
-..\venv_1.26.11.0_20261121_180244\Scripts\python.exe -m server
+..\venv_1.26.11.0_20261121_180244\Scripts\python.exe -m main
 ```
 
-然后打开 `http://127.0.0.1:{端口}`（端口见 `config.json` 的 `server.port`），接口文档在 `/docs`。临时换端口：`-m server --port 8080`。
+然后打开 `http://127.0.0.1:{端口}`（端口见 `config.json` 的 `server.port`），接口文档在 `/api/docs`。临时换端口：`-m main --port 8080`。
 
-开发时在 PyCharm 里直接运行 `src/run.py` 也可以，和 `-m server` 是同一套启动逻辑。
+开发时在 PyCharm 里直接运行 `src/main.py` 也可以，效果相同。
 
 ## 部署为 Windows 服务
 
@@ -74,10 +117,10 @@ cd D:\Code\FridgeManager\src
 ### 工作方式
 
 - **父进程**（`service.py`）只做服务控制，导入的东西很少，能尽快连上服务管理器。
-- **子进程**里运行 `server.run_server()`（uvicorn + FastAPI）。
+- **子进程**里运行 `main.Server`（uvicorn + FastAPI）。
 - **停止**（服务停止，或系统关机时的 PRESHUTDOWN）：先通知子进程**优雅关闭**，日志里会记录"服务停止"和"服务器已退出"。10 秒内没退出，再用 `taskkill /T` 结束整个进程树。服务管理器会一直收到"正在停止"的进度，不会误判为卡死。重复收到停止请求只处理一次。
 - **服务器自己退出**（比如端口被占用、配置写错）：服务会报告失败，不会空转着一直显示"正在运行"。可以在服务属性的"恢复"页里设置失败后自动重启。
-- **日志**：服务器运行日志写入 `logs/fridgemanager.log`；服务的启动、停止和失败会写入事件查看器（Windows 日志 → 应用程序）。
+- **日志**：服务器运行日志写入 `logs/fridgemanager_{启动时间}.log`；服务的启动、停止和失败会写入事件查看器（Windows 日志 → 应用程序）。
 
 ### 手动注册（管理员 PowerShell）
 
@@ -116,8 +159,9 @@ New-Service -Name FridgeManager -DisplayName "冰箱管家 FridgeManager" -Start
 发布新版本：
 
 ```powershell
-.venv\Scripts\python.exe src\bump_version.py --dry-run   # 先看看下一个版本号
-.venv\Scripts\python.exe src\bump_version.py             # 写入 VERSION，并在更新日志顶部插入新版本标题
+cd src
+..\.venv\Scripts\python.exe -m function.version_bumper --dry-run   # 先看看下一个版本号
+..\.venv\Scripts\python.exe -m function.version_bumper             # 写入 VERSION，并在更新日志顶部插入新版本标题
 ```
 
 ## 配置 `config/config.json`
@@ -126,7 +170,7 @@ New-Service -Name FridgeManager -DisplayName "冰箱管家 FridgeManager" -Start
 |---|---|---|
 | `server.host` / `server.port` | 监听地址 / 端口 | `127.0.0.1` / `8000` |
 | `database.path` | SQLite 文件路径 | `data/fridge.db` |
-| `log.path` | 日志文件路径 | `logs/fridgemanager.log` |
+| `log.dir` | 日志目录（旧配置的 `log.path` 也能用，取它所在的目录） | `logs` |
 | `log.level` | 日志级别 | `INFO` |
 | `log.retention_days` | 日志保留天数 | `14` |
 | `fridge.expiring_days` | 剩余天数 ≤ 该值算"即将过期" | `3` |
@@ -141,9 +185,20 @@ New-Service -Name FridgeManager -DisplayName "冰箱管家 FridgeManager" -Start
 
 ## 日志
 
-- 同时输出到控制台和 `log.path`。内容包括：启动/停止、每个 `/api` 请求（方法、路径、状态码、耗时）、食材和食谱的增删改、推荐结果数量、未捕获的异常堆栈。
-- 每天午夜轮转一次，旧文件命名为 `fridgemanager.log.YYYY-MM-DD`。
-- 超过 `retention_days`（默认 14 天）的旧日志会自动删除：轮转时会清理，程序启动时也会再检查一次（防止午夜时程序没在运行）。
+日志由公共库（`common_lib.api.setup_api_logging`）配置：
+
+- 同时输出到控制台和 `log.dir` 目录下的 `fridgemanager_{启动时间}.log`（如 `fridgemanager_261122_010608.log`），每天午夜轮转。
+- 每行的格式：`时间 - 级别 - 线程 - 类名 - [请求 ID] - 内容`。类名就是写日志的类（如 `FridgeService`、`RecipeTable`）。请求 ID 取自请求头 `ID-Request`，网页不带这个头，所以显示为 `[]`。
+- 内容包括：启动/停止、每个请求的路径和耗时（`MiddleWare`）、出错的请求（方法、路径、状态码、原因）、食材和食谱的增删改、推荐结果数量、未捕获的异常堆栈。
+- 超过 `retention_days`（默认 14 天）的旧日志会自动删除：启动时和每次轮转时都会清理。升级前留下的 `fridgemanager.log.*` 也会按同样的规则清理掉。
+
+## 出错时的返回格式
+
+接口出错时返回公共库的错误格式，HTTP 状态码为 404（不存在）、409（重名）或 422（参数不对）：
+
+```json
+{"Error": {"Title": "Not Found", "Method": "/api/foods/99", "ErrorMsg": "食材不存在"}}
+```
 
 ## 功能
 
@@ -160,7 +215,8 @@ New-Service -Name FridgeManager -DisplayName "冰箱管家 FridgeManager" -Start
 
 ### 推荐食谱
 - 用冰箱里**没过期**的食材去匹配食谱库里每道菜的"主要食材"。调料默认家里都有，不参与匹配。
-- 匹配比较宽松：名称互相包含就算匹配（比如"土鸡蛋"能匹配"鸡蛋"）。
+- 匹配规则：名字**完全相同**才算匹配。不按字面包含匹配，所以"葱"不会匹配"洋葱"，"鸡"不会匹配"鸡蛋"。想让几种食材互相通用，用下面的"食材大类"。
+- **食材大类**：食谱主料写大类名（如"菌菇"），冰箱里有大类里的任何一样（如"干香菇""羊角菇"）就算有，推荐卡片上显示成"菌菇（干香菇）"。食谱写具体食材（如"香菇"）时不会用同类的其他食材代替。见下方"食材大类"。
 - 排序：缺的食材越少越靠前 → 能用掉的临期食材越多越靠前 → 匹配率越高越靠前。
 - 可以选择"最多缺少 0/1/2/不限 种食材"。选 0/1/2 时，至少要有一种食材在冰箱里才会列出来；选"不限"会显示全部食谱，即使冰箱里一样都没有。
 - **今日一荤一素**：顶部分别给出排名第一的荤菜和素菜，各自可以"换一换"，下面列出两道菜还需要买的食材。
@@ -184,8 +240,26 @@ New-Service -Name FridgeManager -DisplayName "冰箱管家 FridgeManager" -Start
   - **只允许从 `https://pullit.up.railway.app` 导入**，其他网站的链接会被拒绝（包括跳转到其他网站的情况）。允许的网站在 `config/config.json` 的 `recipe_import.allowed_hosts` 里配置，域名必须完全一致，且必须是 https。
   - 识别代码同时支持 schema.org Recipe 结构化数据和 SvelteKit `__data.json` 两种格式，以后放开别的网站时可以直接用。
   - 另外还会检查域名解析出的地址必须是公网地址，不能用来访问局域网或本机。
+  - **导入时报"HTTPS 证书校验失败"怎么查**：在出问题的那台机器上，用服务器所用的同一个环境运行：
+    ```powershell
+    cd <项目>\src
+    <环境>\Scripts\python.exe -m importer "https://pullit.up.railway.app/recipes/<某个菜谱>"
+    ```
+    它会打印 Python 环境、本机时间、两种证书校验方式的结果、网站实际返回的证书（签发者、有效期），最后做一次导入测试。常见原因：
+    - 环境里没装 `truststore`；
+    - 本机时间不对；
+    - 杀毒软件（如 Norton）替换了证书，而程序作为 Windows 服务运行时，用的是系统账户，看不到只装在个人账户下的根证书。
   - HTTPS 证书交给操作系统校验（依赖 `truststore`），结果和浏览器一致。电脑上装了 Norton 这类会扫描 HTTPS 的杀毒软件时，Python 默认的校验方式可能报"certificate has expired / verify failed"。遇到这种情况，先确认运行服务器的 Python 环境执行过 `pip install -e .`。
-- `src/data/recipes.json` 里新增的食谱，下次启动时会自动导入已有数据库；在网页上删掉的内置食谱不会被重新加回来。
+- `config/recipes.json` 里新增的食谱，下次启动时会自动导入已有数据库；在网页上删掉的内置食谱不会被重新加回来。
+
+### 食材大类（右上角齿轮 ⚙）
+- 一个大类包含多种具体食材，比如"菌菇"包含香菇、羊角菇、平菇、金针菇……第一次启动时会预置"菌菇"作为示例，之后可以在网页上随意增删改，改完立即生效，不用重启。
+- 大类里的食材也要名字完全相同才算："干香菇"和"香菇"是两样，冰箱里会出现的叫法都要列上。
+- 大类里可以写另一个大类名（比如"干货"包含"菌菇""腐竹"），会层层展开；不允许互相包含。
+- 大类改名时，其他大类里引用它的地方会一起改；**食谱里写的旧名字不会自动改**，需要自己编辑食谱。
+- 编辑食谱时，食材名输入框会提示大类名；推荐和食谱卡片上，大类名带虚线框，鼠标悬停可以看到包含哪些食材。
+- 冰箱页的名称下拉也会列出大类里的食材（"大类里的食材"分组），输入"菇"就能选到"羊角菇"。
+- 补货清单里写大类名（如"菌菇"）时，往冰箱里添加其中任何一样（如"羊角菇"），这一项也会被自动删除。
 
 ### 外观
 - 深色模式：跟随手机 / 电脑系统的夜间模式自动切换，切换时页面会实时变化，不需要刷新。日期选择器、下拉框等原生控件和手机浏览器地址栏也会一起变色。
@@ -198,7 +272,7 @@ New-Service -Name FridgeManager -DisplayName "冰箱管家 FridgeManager" -Start
 - 标签上的红色数字是待买数量。
 - 加入清单的方式：在本页直接添加；食材数量选"缺货"；食材点"吃完"；"今日一荤一素"里点"加入补货清单"；本页底部"快用完了"（数量为见底的食材）点"加入补货清单"。同名的不会重复添加。
 - **买到了**：跳到食材页并预填好（预设食材会自动带上保质期），保存后自动从清单移除。
-- **自动移除**：只要往冰箱里添加了**同名**食材（名字完全相同），补货清单里的这一项就会被自动删除，不管是不是从"买到了"进去的。
+- **自动移除**：只要往冰箱里添加了**同名**食材（名字完全相同），补货清单里的这一项就会被自动删除，不管是不是从"买到了"进去的。清单里是大类名（如"菌菇"）时，添加其中任何一样（如"羊角菇"）也会删除。
 - 清单里的条目不算"冰箱里有"，推荐食谱时不会被当成已有食材。
 
 ## API
@@ -216,7 +290,11 @@ New-Service -Name FridgeManager -DisplayName "冰箱管家 FridgeManager" -Start
 | PUT | `/api/recipes/{id}` | 修改整道食谱（字段同添加；`type` 为 null 时按主料自动判断） |
 | PATCH | `/api/recipes/{id}` | 修改荤/素，body：`{"type": "荤"}` |
 | DELETE | `/api/recipes/{id}` | 删除食谱 |
-| GET | `/api/recommend?max_missing=2&type=素` | 推荐食谱（`type` 可选；`max_missing=-1` 表示不限） |
+| GET | `/api/recommend?max_missing=2&type=素` | 推荐食谱（`type` 可选；`max_missing=-1` 表示不限）。`used`：`{食谱食材: 实际用到的冰箱食材}`，只列名字不同的，如 `{"菌菇": "干香菇"}` |
+| GET | `/api/groups` | 食材大类：`[{id, name, members, expanded}]`，`expanded` 为展开嵌套大类后的全部名字 |
+| POST | `/api/groups` | 添加大类，body：`{"name": "菌菇", "members": ["香菇", "羊角菇"]}`；重名 409，互相包含 422 |
+| PUT | `/api/groups/{id}` | 修改大类（改名时同步其他大类里的引用） |
+| DELETE | `/api/groups/{id}` | 删除大类 |
 | GET | `/api/daily?max_missing=2` | 今日一荤一素：`{"荤": [...], "素": [...]}`，各自按推荐顺序排列 |
 | GET | `/api/presets` | 食材预设 |
 | GET | `/api/version` | 当前版本：`{"name": "FridgeManager", "version": "1.26.11.0"}` |

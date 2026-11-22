@@ -7,9 +7,56 @@
 - 当月发布的第一个版本序号为 `0`，之后每发布一次加 `1`；进入新的月份后重新从 `0` 开始。
 - 例：2026 年 11 月第一个版本是 `1.26.11.0`，第二个是 `1.26.11.1`；2026 年 12 月第一个版本是 `1.26.12.0`。
 - 版本号只写在根目录的 `VERSION` 文件里，`pyproject.toml`、后端接口 `/api/version` 和网页底部都从这里读取。
-- 发布新版本：运行 `.venv\Scripts\python.exe src\bump_version.py`，它会按上面的规则算出下一个版本号、写入 `VERSION`，并在本文件顶部插入新版本的标题，然后补充更新内容即可。
+- 发布新版本：在 `src` 目录下运行 `..\.venv\Scripts\python.exe -m function.version_bumper`，它会按上面的规则算出下一个版本号、写入 `VERSION`，并在本文件顶部插入新版本的标题，然后补充更新内容即可。
 
 ---
+
+## 1.26.11.3 — 2026-11-21
+
+### 新增
+- **食材大类**（页头右上角齿轮 ⚙）：一个大类包含多种具体食材，比如"菌菇"包含香菇、羊角菇、平菇等。可以在网页上新建、编辑、删除，改完立即生效。
+  - 食谱主料写大类名（如"菌菇"）时，冰箱里有其中任何一样（如"干香菇""羊角菇"）就算有，推荐卡片上显示成"菌菇（干香菇）"。食谱写具体食材（如"香菇"）时，不会用同类的其他食材代替。
+  - 大类里的食材也要名字完全相同才算："干香菇"和"香菇"是两样，需要的话都列上。
+  - 大类里可以写另一个大类名，会层层展开；不允许互相包含。改名时，其他大类里的引用会一起改，但食谱里写的旧名字需要自己编辑。
+  - 第一次启动时预置"菌菇"大类作为示例。
+- 冰箱页的名称下拉新增"大类里的食材"分组，输入"菇"就能选到"羊角菇"。
+- 编辑食谱时，食材名输入框会提示大类名；食谱和推荐卡片上的大类名带虚线框，鼠标悬停显示包含哪些食材。
+- 补货清单里是大类名（如"菌菇"）时，往冰箱里添加其中任何一样（如"羊角菇"），这一项也会被自动删除。
+- 新增接口 `/api/groups`（增删改查）；`/api/recommend` 的结果新增 `used` 字段，列出食谱食材实际用的是冰箱里哪一样。
+- 排查导入问题：新增诊断命令 `python -m importer <链接>`，打印 Python 环境、本机时间、证书校验结果和网站返回的证书。证书报"已过期 / 尚未生效"时，错误提示会直接让你检查服务器时间，并显示服务器当前时间。
+
+### 变更
+- **推荐食谱改为名字完全相同才算匹配**，去掉了原来"名字互相包含就算匹配"的规则。原规则会把"葱"匹配到"洋葱"、"鸡"匹配到"鸡蛋"。现在想让几种食材通用（比如"鸡蛋"和"土鸡蛋"），请把它们放进同一个食材大类，再让食谱写大类名。
+
+### 代码结构调整
+- 代码改为按功能分目录、全部用类实现（目录说明见 README 的"目录结构"）：
+  - `data/`：数据读写，一张表一个类（`FoodTable`、`RecipeTable`、`SeedImportedTable`、`IngredientGroupTable`），由 `Database` / `Session` 管理连接和事务；
+  - `function/`：业务功能（`FridgeService`、`RecipeService`、`GroupService`、`Recommender`、`RecipeTypeClassifier`、`LogManager`、`VersionBumper` 等）；
+  - `api/`：HTTP 接口，每个类一组路由；
+  - `importer/`：从链接导入食谱（原 `importer.py` 拆成多个类）。
+- **只保留一个入口 `main.py`**：去掉了 `run.py`、`server.py`。前台运行改为 `python -m main`（原来是 `python -m server`），PyCharm 里直接运行 `src/main.py`。`python -m service`（Windows 服务）和 `python -m importer <链接>`（诊断）用法不变。
+- 内置食谱 `recipes.json` 从 `src/data/` 移到 `config/`，和其他配置放在一起。
+- 发布新版本的命令改为在 `src` 目录下运行 `python -m function.version_bumper`（原 `src/bump_version.py`）。
+- 接口、数据库结构和网页行为都没有变化（出错时的返回格式除外，见下面"公共库"）。
+
+### 公共库 ZQCommonLib
+- 新增 git 子模块 `libs/CommonLib`（公共库 ZQCommonLib），以 `-e` 模式安装 `ZQCommonLib[api]`，并写进 `pyproject.toml` 的依赖。fastapi、uvicorn、pydantic、pywin32 改由公共库统一锁定版本，`pyproject.toml` 不再单独写。Python 要求提高到 3.13。
+- **日志**改用公共库的 `setup_api_logging`，去掉了自己写的日志代码：
+  - 日志文件改为 `logs/fridgemanager_{启动时间}.log`，每天午夜轮转，仍然自动清理 14 天前的日志（升级前留下的 `fridgemanager.log.*` 也会被清理）。
+  - 每行带线程名、类名和请求 ID。各个类改为继承公共库的 `Base`，用 `get_logger()` 写日志。
+  - 配置项 `log.path`（日志文件）改为 `log.dir`（日志目录）。旧配置仍然能用，取 `log.path` 所在的目录。
+- **FastAPI 应用**改用公共库的 `create_app` 创建：
+  - 每个请求自动记录路径和耗时，响应头带 `X-Process-Time`。去掉了自己写的请求日志中间件，只保留给页面和静态文件加 `Cache-Control: no-cache` 的部分。
+  - **接口文档从 `/docs` 移到 `/api/docs`**。
+  - 出错时统一返回公共库的格式 `{"Error": {"Title", "Method", "ErrorMsg"}}`，HTTP 状态码不变（404 / 409 / 422）。网页已经同步修改。
+  - 参数校验失败没有用公共库的 `ExceptionHandler`：它会把错误消息写进响应头，而响应头只能放 latin-1 字符，中文消息（如"保质期不能早于存入日期"）会出错。这里换成了本项目自己的处理，返回格式相同。
+- 启动服务器没有用公共库的 `run_api`：Windows 服务需要从另一个线程让服务器优雅关闭，并根据退出码判断是否启动成功，`run_api` 做不到。
+- `.gitignore` 里的 `data/` 改为 `/data/`，只忽略根目录的运行时数据，不再把 `src/data/` 下的代码一起忽略。
+
+### 升级
+- 先 `git submodule update --init` 下载公共库，再运行 `setup_venv.bat` 建新环境（新环境会先以 `-e` 模式装公共库），然后把服务指向新环境。需要 Python 3.13 及以上。
+- 改了 `src/` 下的代码，**需要重启服务（或服务器）**。注册的 Windows 服务（`service.py`）不用改。如果有脚本或快捷方式用的是 `python -m server` 或 `src/run.py`，要改成 `python -m main`。
+- 数据库会在启动时自动新增 `ingredient_groups` 表，已有数据不受影响；配置不变。
 
 ## 1.26.11.2 — 2026-11-21
 
