@@ -268,6 +268,11 @@ button.ghost { border-style: dashed; width: 100%; margin-top: 4px; color: var(--
 .group-form textarea { width: 100%; }
 .group-form .actions { justify-content: flex-end; }
 .badge.group { outline: 1px dashed currentColor; outline-offset: -1px; }   /* 大类名：虚线框 */
+/* 食谱库按原材料筛选 */
+.library-filter #library-ing { flex: 1; min-width: 0; }
+.library-filter .check { flex-direction: row; align-items: center; gap: 4px; white-space: nowrap; }
+.badge.seasoning { background: var(--orange-bg); color: var(--orange); }
+.badge.hit { background: var(--primary); color: var(--on-primary); outline: none; }
 .badge small { opacity: .8; }
 
 /* 今日一荤一素 */

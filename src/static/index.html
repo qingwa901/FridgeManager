@@ -141,6 +141,11 @@
         <button data-type="" class="on">全部</button><button data-type="荤">荤菜</button><button data-type="素">素菜</button>
       </div>
     </div>
+    <div class="toolbar library-filter">
+      <input id="library-ing" type="search" list="ing-hints" autocomplete="off"
+             placeholder="按原材料筛选，如：鸡蛋 番茄（多个用空格分开）">
+      <label class="check"><input type="checkbox" id="library-ing-seasoning"> 也查调料</label>
+    </div>
     <div id="recipe-list" class="grid"></div>
   </section>
 

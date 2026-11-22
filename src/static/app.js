@@ -476,11 +476,14 @@ function ingBadge(x, cls, r = null, extra = "") {
     used ? `<small>（${esc(used)}）</small>` : ""}${extra}</span>`;
 }
 
-function recipeCard(r, { recommend = false } = {}) {
+// hits：食谱库按原材料筛选时命中的食材 / 调料名，卡片上高亮
+function recipeCard(r, { recommend = false, hits = null } = {}) {
   recipeCache[r.id] = r;
+  const hitSeasonings = hits ? r.seasonings.filter((x) => hits.has(x)) : [];
   const tags = recommend
     ? r.have.map((x) => ingBadge(x, "have", r)).join("") + r.missing.map((x) => ingBadge(x, "missing")).join("")
-    : r.ingredients.map((x) => ingBadge(x, "fresh")).join("");
+    : r.ingredients.map((x) => ingBadge(x, hits?.has(x) ? "fresh hit" : "fresh")).join("") +
+      hitSeasonings.map((x) => ingBadge(x, "seasoning hit")).join("");
   return `
     <div class="card recipe" data-recipe="${r.id}">
       <h3><span>${typeBadge(r, !recommend)} ${esc(r.name)}</span>
@@ -556,14 +559,41 @@ async function loadRecipes() {
   renderLibrary();
   buildIngredientIndex();
 }
+// 按原材料筛选：每个词都要在食谱里找到（多个词 = 同时用到）。
+// 食材名包含这个词就算，比如"牛"能找到牛肉、牛腩；食谱写的是大类（如"菌菇"）时，
+// 这个词和大类里某个食材完全相同（如"羊角菇"）也算。大类不按包含匹配，否则"牛"会因为"牛肝菌"找到菌菇的菜。
+function ingredientHits(r, words, withSeasoning) {
+  const names = withSeasoning ? [...r.ingredients, ...r.seasonings] : r.ingredients;
+  const matchesWord = (n, w) => n.includes(w) || !!groups.find((g) => g.name === n)?.expanded.includes(w);
+  const hits = new Set();
+  for (const w of words) {
+    const found = names.filter((n) => matchesWord(n, w));
+    if (!found.length) return null;
+    found.forEach((n) => hits.add(n));
+  }
+  return hits;
+}
+
 function renderLibrary() {
   const t = segValue("library-type");
-  const list = library.filter((r) => !t || r.type === t);
+  const words = splitList($("#library-ing").value);
+  const withSeasoning = $("#library-ing-seasoning").checked;
+  const list = [];
+  for (const r of library) {
+    if (t && r.type !== t) continue;
+    const hits = words.length ? ingredientHits(r, words, withSeasoning) : null;
+    if (words.length && !hits) continue;
+    list.push({ r, hits });
+  }
   const meat = library.filter((r) => r.type === "荤").length;
-  $("#recipe-count").textContent = `共 ${library.length} 道（荤 ${meat} / 素 ${library.length - meat}）`;
-  $("#recipe-list").innerHTML = list.map((r) => recipeCard(r)).join("") || `<div class="empty card">没有食谱</div>`;
+  $("#recipe-count").textContent = `共 ${library.length} 道（荤 ${meat} / 素 ${library.length - meat}）` +
+    (words.length ? `，用到「${words.join("、")}」的有 ${list.length} 道` : "");
+  $("#recipe-list").innerHTML = list.map(({ r, hits }) => recipeCard(r, { hits })).join("")
+    || `<div class="empty card">${words.length ? `没有用到「${esc(words.join("、"))}」的食谱` : "没有食谱"}</div>`;
 }
 bindSeg("library-type", renderLibrary);
+$("#library-ing").addEventListener("input", renderLibrary);
+$("#library-ing-seasoning").addEventListener("change", renderLibrary);
 
 $("#recipe-form").addEventListener("submit", async (e) => {
   e.preventDefault();
