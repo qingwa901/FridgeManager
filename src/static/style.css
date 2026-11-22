@@ -79,7 +79,8 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adj
 body { margin: 0; font-family: system-ui, "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); }
 header { background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 24px;
   display: flex; align-items: center; gap: 24px; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
-h1 { font-size: 20px; margin: 0; }
+h1 { font-size: 20px; margin: 0; display: flex; align-items: center; gap: 8px; }
+h1 .logo { width: 34px; height: 34px; flex-shrink: 0; }
 h2 { font-size: 16px; margin: 0 0 12px; }
 nav { display: flex; gap: 4px; }
 .tab { border: none; background: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 15px; color: var(--muted); }
@@ -293,7 +294,8 @@ dialog { max-height: 85vh; overflow: auto; }
 /* ---------------- 手机 ---------------- */
 @media (max-width: 640px) {
   header { padding: 10px 16px 0; gap: 8px; }
-  h1 { font-size: 18px; }
+  h1 { font-size: 18px; gap: 6px; }
+  h1 .logo { width: 30px; height: 30px; }
   nav { width: 100%; }
   .tab { flex: 1; padding: 10px 4px; border-radius: 8px 8px 0 0; }
   main { padding: 12px 16px calc(60px + env(safe-area-inset-bottom)); }

@@ -12,11 +12,12 @@
     try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
   </script>
   <title>冰箱管家</title>
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header>
-  <h1>🧊 冰箱管家</h1>
+  <h1><img class="logo" src="/static/logo.svg" alt="">冰箱管家</h1>
   <div class="header-tools">
     <button type="button" class="theme-toggle" id="theme-toggle" title="切换主题：自动 → 浅色 → 深色"></button>
     <button type="button" class="gear" id="open-groups" title="食材大类" aria-label="食材大类">⚙</button>
