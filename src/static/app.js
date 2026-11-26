@@ -143,11 +143,11 @@ async function loadFoods() {
   renderFoods();
 }
 
-// 种类筛选：表单里的种类 + 数据里出现过的种类，带数量
-function renderCategoryFilter() {
-  const sel = $("#food-category"), cur = sel.value;
+// 种类筛选下拉：表单里的种类 + 数据里出现过的种类，带数量（冰箱页和补货清单页共用）
+function renderCategoryFilter(sel = $("#food-category"), items = foods) {
+  const cur = sel.value;
   const count = {};
-  foods.forEach((f) => { count[f.category] = (count[f.category] || 0) + 1; });
+  items.forEach((f) => { count[f.category] = (count[f.category] || 0) + 1; });
   const cats = [...new Set([...[...foodForm.category.options].map((o) => o.value), ...Object.keys(count)])];
   sel.innerHTML = `<option value="">全部种类</option>` + cats.map((c) =>
     `<option value="${esc(c)}"${count[c] ? "" : " disabled"}>${esc(c)}（${count[c] || 0}）</option>`).join("");
@@ -160,7 +160,7 @@ function renderFoods() {
   $("#summary").innerHTML = `
     <div class="stat"><b>${foods.length}</b>全部食材</div>
     <div class="stat expired"><b>${counts.expired}</b>已过期</div>
-    <div class="stat expiring"><b>${counts.expiring}</b>3 天内过期</div>
+    <div class="stat expiring" title="食材 3 天内到期；药品 2 个月内到期（在 config.json 里设置）"><b>${counts.expiring}</b>快过期</div>
     <div class="stat fresh"><b>${counts.fresh + counts.none}</b>新鲜</div>`;
   renderCategoryFilter();
 
@@ -232,21 +232,39 @@ $("#presets").addEventListener("click", (e) => {
 // ---------------------------------------------------------------- 名称下拉：食谱里用到的食材 + 文字筛选
 let ingredientIndex = [];   // [{name, count, kind: "main" | "seasoning"}]，按使用次数排序
 let comboItems = [], comboActive = -1;
+let armedForget = null;   // 点过 × 、等待第二次确认的输入记录名
 const nameInput = foodForm.name, comboList = $("#name-combo");
 
-const KIND_ORDER = { main: 0, member: 1, seasoning: 2 };
-const KIND_TEXT = { main: "食谱主料", member: "大类里的食材", seasoning: "调料" };
+const KIND_ORDER = { history: 0, main: 1, member: 2, seasoning: 3 };
+const KIND_TEXT = { history: "我记录过的", main: "食谱主料", member: "大类里的食材", seasoning: "调料" };
+
+// 输入记录：输入过的每样东西和最近用的种类（删了食材也保留），用于名称建议和自动选种类
+let itemHistory = [], historyMap = new Map();
+async function loadHistory() {
+  itemHistory = await api("/api/history");
+  historyMap = new Map(itemHistory.map((h) => [h.name, h]));
+  buildIngredientIndex();
+}
+// 名称是记录过的就自动选上次用的种类（form 是冰箱页或补货清单页的表单）
+function fillCategoryFromHistory(form) {
+  const h = historyMap.get(form.name.value.trim());
+  if (h && [...form.category.options].some((o) => o.value === h.category)) form.category.value = h.category;
+  return h;
+}
 
 function buildIngredientIndex() {
   const m = new Map();
   const groupNames = new Set(groups.map((g) => g.name));
+  // 记录过的排最前，最近用过的在前（后端已排好）；同时出现在食谱里的也归到这一组
+  itemHistory.forEach((h, order) => m.set(h.name, {
+    name: h.name, count: 0, kind: "history", category: h.category, uses: h.use_count, order }));
   for (const r of library) {
     for (const [list, kind] of [[r.ingredients, "main"], [r.seasonings, "seasoning"]]) {
       for (const n of new Set(list)) {
         if (groupNames.has(n)) continue;          // 大类名（如"菌菇"）不是具体食材，不放进冰箱名称下拉
         const e = m.get(n) || { name: n, count: 0, kind };
         e.count++;
-        if (kind === "main") e.kind = "main";   // 在任一道菜里当过主料就算主料
+        if (kind === "main" && e.kind !== "history") e.kind = "main";   // 在任一道菜里当过主料就算主料
         m.set(n, e);
       }
     }
@@ -257,8 +275,9 @@ function buildIngredientIndex() {
       if (!groupNames.has(n) && !m.has(n)) m.set(n, { name: n, count: 0, kind: "member", group: g.name });
     }
   }
-  ingredientIndex = [...m.values()].sort((a, b) =>
-    KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || b.count - a.count || a.name.localeCompare(b.name, "zh"));
+  ingredientIndex = [...m.values()].sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]
+    || (a.kind === "history" ? a.order - b.order : b.count - a.count || a.name.localeCompare(b.name, "zh")));
+  renderShopHints();
   // 食谱编辑器的食材名提示：大类名 + 食谱里用过的主料
   $("#ing-hints").innerHTML = [...groups.map((g) => [g.name, `大类：${g.members.slice(0, 6).join("、")}…`]),
     ...ingredientIndex.filter((x) => x.kind === "main").map((x) => [x.name, ""])]
@@ -275,15 +294,23 @@ function renderCombo() {
   comboList.innerHTML = comboItems.length ? comboItems.map((x, i) => {
     const head = x.kind !== lastKind ? `<li class="combo-group" role="presentation">${KIND_TEXT[x.kind]}</li>` : "";
     lastKind = x.kind;
+    const info = x.kind === "history" ? `${esc(x.category)} · ${x.uses} 次`
+      : x.kind === "member" ? `属于${esc(x.group)}` : `${x.count} 道菜`;
+    // 删除记录要两次确认：点 × 先变成红色的"删除？"（第 1 次），再点它弹出确认框（第 2 次）
+    const forget = x.kind !== "history" ? ""
+      : x.name === armedForget
+        ? `<button type="button" class="combo-forget armed" data-forget-confirm="${esc(x.name)}" title="再点一次确认删除">删除？</button>`
+        : `<button type="button" class="combo-forget" data-forget="${esc(x.name)}" title="删除这条记录（打错的名字）" aria-label="删除记录">×</button>`;
     return `${head}<li class="combo-item" role="option" data-i="${i}">
       <span>${mark(x.name)}${have.has(x.name) ? ` <em class="have-tag">已有</em>` : ""}</span>
-      <small>${x.kind === "member" ? `属于${esc(x.group)}` : `${x.count} 道菜`}</small></li>`;
-  }).join("") : `<li class="combo-empty">${ingredientIndex.length ? `食谱里没有"${esc(q)}"，直接保存即可` : "食谱库还没有食材"}</li>`;
+      <small>${info}${forget}</small></li>`;
+  }).join("") : `<li class="combo-empty">${ingredientIndex.length ? `没有"${esc(q)}"，直接保存即可，下次就会出现在这里` : "还没有记录"}</li>`;
   comboList.hidden = false;
   nameInput.setAttribute("aria-expanded", "true");
 }
 
 function closeCombo() {
+  armedForget = null;
   comboList.hidden = true;
   nameInput.setAttribute("aria-expanded", "false");
 }
@@ -293,6 +320,7 @@ function pickCombo(i) {
   if (!x) return;
   const p = presets.find((p) => p.name === x.name);
   if (p) applyPreset(p); else nameInput.value = x.name;
+  fillCategoryFromHistory(foodForm);   // 记录过的用上次的种类（比预设的优先）
   closeCombo();
   foodForm.quantity.focus();
 }
@@ -306,7 +334,7 @@ function moveCombo(d) {
 }
 
 nameInput.addEventListener("focus", renderCombo);
-nameInput.addEventListener("input", renderCombo);
+nameInput.addEventListener("input", () => { armedForget = null; renderCombo(); });   // 打字就取消待删除
 nameInput.addEventListener("keydown", (e) => {
   if (comboList.hidden && (e.key === "ArrowDown" || e.key === "ArrowUp")) { renderCombo(); return; }
   if (e.key === "ArrowDown") { e.preventDefault(); moveCombo(1); }
@@ -315,13 +343,40 @@ nameInput.addEventListener("keydown", (e) => {
   else if (e.key === "Escape") closeCombo();
 });
 // 用 mousedown 而不是 click：避免输入框先失焦把列表关掉
-comboList.addEventListener("mousedown", (e) => {
+comboList.addEventListener("mousedown", async (e) => {
+  const arm = e.target.closest("[data-forget]");
+  if (arm) {      // 第 1 次确认：× 变成"删除？"，列表保持打开
+    e.preventDefault();
+    armedForget = arm.dataset.forget;
+    renderCombo();
+    return;
+  }
+  const forget = e.target.closest("[data-forget-confirm]");
+  if (forget) {   // 第 2 次确认：弹出确认框
+    e.preventDefault();
+    const name = forget.dataset.forgetConfirm;
+    armedForget = null;
+    if (!confirm(`删除输入记录「${name}」？\n（只是不再出现在建议里，冰箱里的东西不受影响）`)) {
+      nameInput.focus();
+      renderCombo();
+      return;
+    }
+    try {
+      await api(`/api/history/${encodeURIComponent(name)}`, { method: "DELETE" });
+      await loadHistory();
+      renderCombo();
+      nameInput.focus();
+    } catch (err) { toast("删除失败：" + err.message); }
+    return;
+  }
   const li = e.target.closest(".combo-item");
   if (!li) return;
   e.preventDefault();
   pickCombo(+li.dataset.i);
 });
 nameInput.addEventListener("blur", () => setTimeout(closeCombo, 100));
+// 直接打出记录过的完整名字（没从下拉里选）也自动选种类
+nameInput.addEventListener("input", () => fillCategoryFromHistory(foodForm));
 $$(".quick button").forEach((b) => b.addEventListener("click", () => {
   if (foodForm.quantity.value === SHORTAGE) setQuantity(DEFAULT_QTY);
   setNoExpiry(false);
@@ -373,17 +428,23 @@ async function addShortage(name, category = "其他", note = "") {
   return api("/api/foods", { method: "POST", body: JSON.stringify({ name, category, note, quantity: SHORTAGE }) });
 }
 
+// 每次添加 / 修改食材或补货后都会调用这里，顺便刷新输入记录（后端在保存时已经记下了）
 async function loadShopping() {
   shopping = await api("/api/shopping");
   renderShopping();
+  loadHistory().catch(() => {});
 }
 
 function renderShopping() {
   const n = shopping.length;
   $("#shop-count").textContent = n;
   $("#shop-count").hidden = !n;
-  $("#shop-summary").textContent = n ? `共 ${n} 样` : "";
-  $("#shop-list").innerHTML = n ? shopping.map((s) => `
+  // 按种类筛选（同时作用于"快用完了"）。药品等排在最下面由后端排好
+  renderCategoryFilter($("#shop-category"), shopping);
+  const cat = $("#shop-category").value;
+  const list = shopping.filter((s) => !cat || s.category === cat);
+  $("#shop-summary").textContent = !n ? "" : cat ? `${cat} ${list.length} 样 / 共 ${n} 样` : `共 ${n} 样`;
+  $("#shop-list").innerHTML = list.length ? list.map((s) => `
     <div class="shop-item">
       <div class="shop-main">
         <b>${esc(s.name)}</b> <span class="muted">${esc(s.category)}</span>
@@ -395,11 +456,12 @@ function renderShopping() {
         <button data-unshop="${s.id}">删除</button>
       </div>
     </div>`).join("")
+    : n ? `<div class="empty">没有要买的${esc(cat)}</div>`
     : `<div class="empty">补货清单是空的 👍<br><small>食材数量选"缺货"，或在上面直接添加</small></div>`;
 
   // 冰箱里"见底"的食材，提示加入清单
   const inList = new Set(shopping.map((s) => s.name));
-  const low = foods.filter((f) => f.quantity === "见底");
+  const low = foods.filter((f) => f.quantity === "见底" && (!cat || f.category === cat));
   $("#low-wrap").hidden = !low.length;
   $("#low-list").innerHTML = low.map((f) => `
     <div class="shop-item">
@@ -408,10 +470,19 @@ function renderShopping() {
       <div class="shop-ops">${inList.has(f.name) ? `<span class="badge have">已在清单</span>`
         : `<button data-low="${f.id}">加入补货清单</button>`}</div>
     </div>`).join("");
-
-  const names = [...new Set([...ingredientIndex.map((x) => x.name), ...foods.map((f) => f.name)])];
-  $("#shop-hints").innerHTML = names.map((x) => `<option value="${esc(x)}">`).join("");
 }
+
+// 补货清单页"要买什么"的提示：记录过的在前（带上次的种类），然后是食谱里的食材
+function renderShopHints() {
+  const names = [...new Set([...ingredientIndex.map((x) => x.name), ...foods.map((f) => f.name)])];
+  $("#shop-hints").innerHTML = names.map((x) => {
+    const h = historyMap.get(x);
+    return `<option value="${esc(x)}"${h ? ` label="${esc(h.category)}"` : ""}>`;
+  }).join("");
+}
+shopForm.name.addEventListener("input", () => fillCategoryFromHistory(shopForm));
+
+$("#shop-category").addEventListener("change", renderShopping);
 
 shopForm.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -849,3 +920,4 @@ loadPresets();
 loadFoods().then(loadShopping);
 loadRecipes();
 loadGroups();
+loadHistory();

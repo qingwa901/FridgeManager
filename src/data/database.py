@@ -38,4 +38,5 @@ class Database(Base):
             s.recipes.create()
             s.seeds.create()
             s.groups.create()
+            s.history.create()   # 放在 foods 之后：第一次建表时要从 foods 导入
         self.get_logger().info("数据库已就绪：%s", self.path)

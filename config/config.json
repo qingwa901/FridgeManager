@@ -12,7 +12,9 @@
     "retention_days": 14
   },
   "fridge": {
-    "expiring_days": 3
+    "expiring_days": 3,
+    "category_expiring_days": {"药品": 60},
+    "bottom_categories": ["药品"]
   },
   "food_presets": [
     {"name": "包菜",   "category": "蔬菜", "shelf_days": 14, "quantity": "1份"},

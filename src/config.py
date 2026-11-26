@@ -39,6 +39,10 @@ class Settings:
         self.log_retention_days: int = log.get("retention_days", 14)
 
         self.expiring_days: int = cfg["fridge"].get("expiring_days", 3)   # 剩余天数 <= 该值视为"即将过期"
+        # 按种类单独设置的提醒天数（如药品提前 2 个月提醒），没写的种类用 expiring_days
+        self.category_expiring_days: dict[str, int] = cfg["fridge"].get("category_expiring_days", {"药品": 60})
+        # 冰箱和补货清单里排在最下面的种类（如药品）
+        self.bottom_categories: list[str] = cfg["fridge"].get("bottom_categories", ["药品"])
         # 食材预设：[{name, category, shelf_days, quantity}]，用于添加食材时一键填写
         self.food_presets: list[dict] = cfg.get("food_presets", [])
 

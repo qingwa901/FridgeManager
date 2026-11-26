@@ -24,6 +24,7 @@ FridgeManager/
 │  │  ├─ food_api.py              # FoodApi：食材、补货清单
 │  │  ├─ recipe_api.py            # RecipeApi：食谱库、从链接导入
 │  │  ├─ group_api.py             # GroupApi：食材大类
+│  │  ├─ history_api.py           # HistoryApi：输入记录
 │  │  ├─ recommend_api.py         # RecommendApi：推荐、今日一荤一素
 │  │  ├─ system_api.py            # SystemApi：版本号、食材预设
 │  │  └─ page_api.py              # PageApi：首页（JS/CSS 地址带内容指纹）
@@ -31,6 +32,7 @@ FridgeManager/
 │  │  ├─ fridge_service.py        # FridgeService：食材、补货清单
 │  │  ├─ recipe_service.py        # RecipeService：食谱库、内置食谱导入
 │  │  ├─ group_service.py         # GroupService：食材大类
+│  │  ├─ history_service.py       # HistoryService：输入记录
 │  │  ├─ group_resolver.py        # GroupResolver：按大类匹配食材
 │  │  ├─ recommender.py           # Recommender：推荐食谱
 │  │  ├─ recipe_type_classifier.py # RecipeTypeClassifier：判断荤素
@@ -42,7 +44,8 @@ FridgeManager/
 │  │  ├─ food_table.py            # FoodTable：foods
 │  │  ├─ recipe_table.py          # RecipeTable：recipes
 │  │  ├─ seed_imported_table.py   # SeedImportedTable：seed_imported
-│  │  └─ ingredient_group_table.py # IngredientGroupTable：ingredient_groups
+│  │  ├─ ingredient_group_table.py # IngredientGroupTable：ingredient_groups
+│  │  └─ item_history_table.py    # ItemHistoryTable：item_history（输入记录）
 │  ├─ importer/          # 从网页链接识别食谱
 │  │  ├─ recipe_importer.py       # RecipeImporter：抓取 → 识别 → 默认归类
 │  │  ├─ safe_fetcher.py          # SafeFetcher：限制网站、公网地址、HTTPS 证书
@@ -174,6 +177,8 @@ cd src
 | `log.level` | 日志级别 | `INFO` |
 | `log.retention_days` | 日志保留天数 | `14` |
 | `fridge.expiring_days` | 剩余天数 ≤ 该值算"即将过期" | `3` |
+| `fridge.category_expiring_days` | 按种类单独设置的提醒天数，没写的种类用 `expiring_days` | `{"药品": 60}`（提前 2 个月提醒） |
+| `fridge.bottom_categories` | 没到提醒时间时，在"我的冰箱"和补货清单里排在最下面的种类 | `["药品"]` |
 | `recipe_type.meat_words` | 荤菜关键字 | 肉、鸡、鱼、虾、海参等 |
 | `recipe_type.veg_exceptions` | 例外词：含这些词的食材不算荤 | 鸡蛋、牛奶、鸡毛菜等 |
 | `recipe_import.allowed_hosts` | 允许导入的网站域名（必须 https） | `pullit.up.railway.app` |
@@ -206,10 +211,17 @@ cd src
 - 添加、编辑、删除食材，记录名称、数量、分类、放入日期、保质期、备注。提供 +3/7/14/30 天的快捷按钮。
 - 每个食材有四个按钮：**编辑**；**见底**（数量改为见底，补货清单页会提醒）；**吃完**（从冰箱移除，自动加入补货清单）；**删除**（直接删掉，不进补货清单，会二次确认）。
 - 数量从下拉中选：缺货、见底、1份～10份、很多（默认 1份）。选"缺货"= 加入补货清单，不需要保质期，不在食材页显示。列表里"见底"标橙色、"很多"标绿色。以前手动填的数量（如"3 个"）编辑时会显示为"（旧）"选项，可以保留或改成新选项。
-- 名称输入框带下拉列表：点一下就会列出食谱库里用到的所有食材（主料在前、调料在后，按用到的菜数排序，冰箱里已有的会标"已有"）。输入文字会筛选出名字里**包含**这些字的食材，比如输入"牛"会列出牛肉、牛腩、牛里脊。选中的食材如果在预设里，会自动填好分类、数量和保质期。支持 ↑↓ 选择、回车确认、Esc 关闭；列表里没有的名字也可以直接输入保存。
+- 名称输入框带下拉列表：点一下就会列出建议，冰箱里已有的会标"已有"。输入文字会筛选出名字里**包含**这些字的，比如输入"牛"会列出牛肉、牛腩、牛里脊。支持 ↑↓ 选择、回车确认、Esc 关闭；列表里没有的名字也可以直接输入保存。建议分几组：
+  1. **我记录过的**：所有添加过的东西（包括药品、已经删掉或吃完的），最近用过的在前，右边显示上次用的种类和用过几次；
+  2. 食谱主料、大类里的食材、调料。
+- **自动选种类**：从下拉里选，或者直接打出记录过的完整名字，种类会自动换成上次用的。选中的如果在预设里，还会自动填好数量和保质期。补货清单页"要买什么"也一样。
+- 输入记录：每次添加 / 修改都会记下名称和种类，删除食材也不会删掉记录。每个名字只记一条（名称是主键，前后空格会去掉），再次添加只更新种类、次数和时间。打错的名字可以删掉，需要两次确认：点下拉里那一行右边的 **×**，它会变成红色的"删除？"；再点它，确认框里选"确定"。只是不再出现在建议里，冰箱里的东西不受影响。升级后第一次启动时，会把当时冰箱和补货清单里已有的东西先记进去。
 - "常用"预设按钮：点一下自动填好名称、分类、数量和保质期（放入日期 + `shelf_days`）。预设在 `config/config.json` 的 `food_presets` 里增删。
-- 列表主要显示**存入日期**（如"11/16 5天前"）；只有快过期或已经过期的食材才显示到期日期，已过期标红，3 天内过期标橙。顶部显示各状态的数量。
+- 列表主要显示**存入日期**（如"11/16 5天前"）；只有快过期或已经过期的食材才显示到期日期，已过期标红，快过期标橙（食材 3 天内到期，药品 2 个月内到期）。顶部显示各状态的数量。
 - 排序：已过期和快过期的排在最前（按到期日），其余按存入日期从早到晚排（先放进去的先吃）。
+- 也可以记录药品：种类选"药品"。
+  - 药品**提前 2 个月**提醒：剩余 60 天以内就算快过期，标橙。提醒天数在 `config.json` 的 `fridge.category_expiring_days` 里按种类设置。
+  - 快过期、已过期的药品和食材一起排在最上面（按到期日）；没到提醒时间的药品排在列表最下面，不影响食材的查看。排在最下面的种类在 `fridge.bottom_categories` 里配置。
 - 保质期可以不填：勾选"不设保质期"即可（适合米、面、调料、冻品等）。这类食材显示为"不限期"，永远不会被判为过期，推荐时照常可用。
 - 支持搜索、按**种类**筛选（下拉框里显示每个种类有几样）、按状态筛选（含"未设保质期"）。
 
@@ -276,6 +288,8 @@ cd src
 
 ### 补货清单
 - 标签上的红色数字是待买数量。
+- 可以按种类筛选（"待买"右边的下拉框，括号里是数量），同时作用于下面的"快用完了"。
+- 药品排在清单最下面，其余按加入时间排序。
 - 加入清单的方式：在本页直接添加；食材数量选"缺货"；食材点"吃完"；"今日一荤一素"里点"加入补货清单"；本页底部"快用完了"（数量为见底的食材）点"加入补货清单"。同名的不会重复添加。
 - **买到了**：跳到食材页并预填好（预设食材会自动带上保质期），保存后自动从清单移除。
 - **自动移除**：只要往冰箱里添加了**同名**食材（名字完全相同），补货清单里的这一项就会被自动删除，不管是不是从"买到了"进去的。清单里是大类名（如"菌菇"）时，添加其中任何一样（如"羊角菇"）也会删除。
@@ -301,6 +315,8 @@ cd src
 | POST | `/api/groups` | 添加大类，body：`{"name": "菌菇", "members": ["香菇", "羊角菇"]}`；重名 409，互相包含 422 |
 | PUT | `/api/groups/{id}` | 修改大类（改名时同步其他大类里的引用） |
 | DELETE | `/api/groups/{id}` | 删除大类 |
+| GET | `/api/history` | 输入记录：`[{name, category, use_count, last_used}]`，最近用过的在前。添加 / 修改食材时自动记录 |
+| DELETE | `/api/history/{name}` | 删除一条输入记录（不影响食材） |
 | GET | `/api/daily?max_missing=2` | 今日一荤一素：`{"荤": [...], "素": [...]}`，各自按推荐顺序排列 |
 | GET | `/api/presets` | 食材预设 |
 | GET | `/api/version` | 当前版本：`{"name": "FridgeManager", "version": "1.26.11.0"}` |

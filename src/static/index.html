@@ -41,7 +41,7 @@
       <div class="presets" id="presets"></div>
       <label>名称
         <div class="combo">
-          <input name="name" required placeholder="输入或从食谱食材中选择" autocomplete="off"
+          <input name="name" required placeholder="输入，或从记录 / 食谱食材中选择" autocomplete="off"
                  role="combobox" aria-expanded="false" aria-controls="name-combo">
           <ul id="name-combo" class="combo-list" role="listbox" hidden></ul>
         </div>
@@ -51,7 +51,7 @@
         <select name="category">
           <option>蔬菜</option><option>水果</option><option>肉类</option><option>海鲜</option>
           <option>蛋奶</option><option>豆制品</option><option>主食</option><option>饮料</option>
-          <option>调料</option><option selected>其他</option>
+          <option>调料</option><option>药品</option><option selected>其他</option>
         </select>
       </label>
       <label>存入日期<input type="date" name="added_date" required></label>
@@ -160,7 +160,10 @@
     </form>
     <datalist id="shop-hints"></datalist>
 
-    <div class="list-head"><h2>🛒 待买 <small id="shop-summary"></small></h2></div>
+    <div class="list-head">
+      <h2>🛒 待买 <small id="shop-summary"></small></h2>
+      <select id="shop-category" title="按种类筛选（也作用于下面的"快用完了"）"><option value="">全部种类</option></select>
+    </div>
     <div id="shop-list" class="card shop-list"></div>
 
     <div id="low-wrap" hidden>

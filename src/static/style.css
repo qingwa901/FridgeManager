@@ -220,7 +220,11 @@ input[type=date]:disabled { opacity: .45; }
 .combo-group { padding: 6px 12px 2px; font-size: 12px; color: var(--muted); position: sticky; top: -4px; background: var(--card); }
 .combo-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; font-size: 14px; }
 .combo-item:hover, .combo-item.active { background: var(--accent-bg); }
-.combo-item small { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.combo-item small { color: var(--muted); font-size: 12px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+/* 删除输入记录的 ×：手机上也要够大，方便点 */
+.combo-forget { border: none; background: none; color: var(--muted); padding: 0 6px; font-size: 16px; line-height: 1; }
+.combo-forget:hover { color: var(--red); }
+.combo-forget.armed { color: var(--on-accent); background: var(--red); border-radius: 999px; font-size: 12px; padding: 2px 8px; }
 .combo-item mark { background: var(--highlight); color: inherit; border-radius: 2px; padding: 0 1px; }
 .combo-item .have-tag { font-style: normal; font-size: 11px; color: var(--green); background: var(--green-bg); border-radius: 999px; padding: 1px 6px; }
 .combo-empty { padding: 10px 12px; font-size: 13px; color: var(--muted); }

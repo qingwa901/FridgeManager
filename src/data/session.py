@@ -4,6 +4,7 @@ import sqlite3
 
 from data.food_table import FoodTable
 from data.ingredient_group_table import IngredientGroupTable
+from data.item_history_table import ItemHistoryTable
 from data.recipe_table import RecipeTable
 from data.seed_imported_table import SeedImportedTable
 
@@ -17,3 +18,4 @@ class Session:
         self.recipes = RecipeTable(conn)
         self.seeds = SeedImportedTable(conn)
         self.groups = IngredientGroupTable(conn)
+        self.history = ItemHistoryTable(conn)

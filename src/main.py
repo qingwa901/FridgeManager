@@ -42,6 +42,7 @@ from fastapi.staticfiles import StaticFiles
 
 from api.food_api import FoodApi
 from api.group_api import GroupApi
+from api.history_api import HistoryApi
 from api.page_api import PageApi
 from api.recipe_api import RecipeApi
 from api.recommend_api import RecommendApi
@@ -50,6 +51,7 @@ from config import Settings, settings
 from data import Database
 from function.fridge_service import FridgeService
 from function.group_service import GroupService
+from function.history_service import HistoryService
 from function.recipe_service import RecipeService
 from function.recipe_type_classifier import RecipeTypeClassifier
 from function.recommender import Recommender
@@ -69,9 +71,11 @@ class FridgeManagerApp(Base):
 
         self.db = Database(settings.db_path)
         classifier = RecipeTypeClassifier(settings.meat_words, settings.veg_exceptions)
-        self.fridge = FridgeService(self.db, settings.expiring_days)
+        self.fridge = FridgeService(self.db, settings.expiring_days, settings.category_expiring_days,
+                                    settings.bottom_categories)
         self.recipes = RecipeService(self.db, classifier, RecipeImporter(settings), settings.SEED_RECIPES_FILE)
         self.groups = GroupService(self.db)
+        self.history = HistoryService(self.db)
         self.recommender = Recommender(self.fridge, self.recipes, self.groups)
 
         self.app = create_app(title="冰箱管家 FridgeManager", version=settings.version, prefix="/api",
@@ -80,7 +84,7 @@ class FridgeManagerApp(Base):
         self.app.add_exception_handler(ServiceError, self._service_error)
         self.app.add_exception_handler(RequestValidationError, self._validation_error)
         for api in (SystemApi(settings), FoodApi(self.fridge), RecipeApi(self.recipes), GroupApi(self.groups),
-                    RecommendApi(self.recommender), PageApi(self.static_dir)):
+                    HistoryApi(self.history), RecommendApi(self.recommender), PageApi(self.static_dir)):
             self.app.include_router(api.router)
         self.app.mount("/static", StaticFiles(directory=self.static_dir), name="static")
 
